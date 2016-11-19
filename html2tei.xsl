@@ -15,7 +15,7 @@
       <xsl:apply-templates select="node() | @*"/>
     </xsl:element>
   </xsl:template>
-  <xsl:template match="node()|@*">
+  <xsl:template match="node()">
     <xsl:copy>
       <xsl:apply-templates select="node() | @*"/>
     </xsl:copy>
@@ -25,7 +25,6 @@
 STRUCTURE
 -->
   <xsl:template match="html:html">
-    <xsl:processing-instruction name="xml-model">href="http://svn.code.sf.net/p/algone/code/teibook/teibook.rng" type="application/xml" schematypens="http://relaxng.org/ns/structure/1.0"</xsl:processing-instruction>
     <xsl:value-of select="$lf"/>
     <TEI>
       <xsl:apply-templates select="node() | @*"/>
@@ -50,6 +49,11 @@ STRUCTURE
     <div type="{local-name()}">
       <xsl:apply-templates select="@*"/>
     </div>
+  </xsl:template>
+  <xsl:template match="html:img">
+    <graphic>
+      <xsl:copy-of select="@*"/>
+    </graphic>
   </xsl:template>
   <!-- no hierachical grouping ? -->
   <xsl:template match="html:div">
@@ -77,7 +81,6 @@ STRUCTURE
       <xsl:otherwise>
         <div>
           <xsl:apply-templates select="@*"/>
-          <xsl:attribute name="type">TODO</xsl:attribute>
           <xsl:apply-templates/>
         </div>
       </xsl:otherwise>
@@ -110,10 +113,12 @@ BLOCKS
 -->
   <!-- Hierarchical headers is not sure -->
   <xsl:template match="html:h1 | html:h2 | html:h3 | html:h4 | html:h5 | html:h6">
+    <!--
     <xsl:text disable-output-escaping="yes">
 &lt;/div>
 &lt;div>
 </xsl:text>
+-->
     <head>
       <xsl:apply-templates select="@*"/>
       <xsl:attribute name="type">
@@ -122,9 +127,11 @@ BLOCKS
       <xsl:apply-templates/>
     </head>
   </xsl:template>
+  <!--
   <xsl:template match="html:h1//text() | html:h2//text() | html:h3//text() | html:h4//text() | html:h5//text() | html:h6//text()">
     <xsl:value-of select="translate(., $ABC, $abc)"/>
   </xsl:template>
+  -->
   <xsl:template match="html:ul | html:ol">
     <list>
       <xsl:apply-templates select="@*"/>
@@ -150,11 +157,45 @@ BLOCKS
       <p/>
     </xsl:if>
     <xsl:choose>
+      <xsl:when test="@class ='annee' ">
+        <dateline>
+          <xsl:apply-templates select="@xml:id | @xml:lang | @lang | @id "/>
+          <xsl:apply-templates/>
+        </dateline>
+      </xsl:when>
+      <xsl:when test=" @class = 'titre' ">
+        <label>
+          <xsl:apply-templates select="@xml:id | @xml:lang | @lang | @id "/>
+          <xsl:apply-templates/>
+        </label>
+      </xsl:when>
+      <xsl:when test=" @class = 'citation' ">
+        <quote>
+          <xsl:apply-templates select="@xml:id | @xml:lang | @lang | @id "/>
+          <p>
+            <xsl:apply-templates/>
+          </p>
+        </quote>
+      </xsl:when>
+      <xsl:when test=" @class = 'resume' ">
+        <argument>
+          <xsl:apply-templates select="@xml:id | @xml:lang | @lang | @id "/>
+          <p>
+            <xsl:apply-templates/>
+          </p>
+        </argument>
+      </xsl:when>
       <xsl:when test="contains(@class, 'poem')">
         <lg>
           <xsl:apply-templates select="@xml:id | @xml:lang | @lang | @id "/>
           <xsl:apply-templates/>
         </lg>
+      </xsl:when>
+      <xsl:when test="@class ='vers' ">
+        <l>
+          <xsl:apply-templates select="@xml:id | @xml:lang | @lang | @id "/>
+          <xsl:apply-templates/>
+        </l>
       </xsl:when>
       <xsl:when test="contains(@class, 'note')">
         <note>
@@ -341,6 +382,26 @@ PHRASES
         </ref>
       </xsl:otherwise>
     </xsl:choose>
+  </xsl:template>
+  <xsl:template match="html:table">
+    <table>
+      <xsl:apply-templates select="node()|@*"/>
+    </table>
+  </xsl:template>
+  <xsl:template match="html:tr">
+    <row>
+      <xsl:apply-templates select="node()|@*"/>
+    </row>
+  </xsl:template>
+  <xsl:template match="html:td">
+    <cell>
+      <xsl:apply-templates select="node()|@*"/>
+    </cell>
+  </xsl:template>
+  <xsl:template match="html:th">
+    <cell role="label">
+      <xsl:apply-templates select="node()|@*"/>
+    </cell>
   </xsl:template>
   <!-- 
  ATTRIBUTES

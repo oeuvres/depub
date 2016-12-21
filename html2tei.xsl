@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<xsl:transform xmlns:xsl="http://www.w3.org/1999/XSL/Transform" version="1.1"
+<xsl:transform xmlns:xsl="http://www.w3.org/1999/XSL/Transform" version="1.0"
   xmlns="http://www.tei-c.org/ns/1.0" 
   xmlns:html="http://www.w3.org/1999/xhtml"
   exclude-result-prefixes="html"
   extension-element-prefixes=""
   >
-  <xsl:output indent="yes" encoding="UTF-8"/>
+  <xsl:output indent="yes" encoding="UTF-8" method="xml" omit-xml-declaration="yes"/>
   <xsl:variable name="lf" select="'&#10;'"/>
   <xsl:variable name="ABC">ABCDEFGHIJKLMNOPQRSTUVWXYZÀÂÄÆÇÉÈÊËÎÏÑÔÖŒÙÛÜ</xsl:variable>
   <xsl:variable name="abc">abcdefghijklmnopqrstuvwxyzàâäæçéèêëîïñôöœùûü</xsl:variable>
@@ -21,11 +21,11 @@
     </xsl:copy>
   </xsl:template>
   <xsl:template match="html:link | html:script | html:style"/>
+  <xsl:template match="html:meta[@http-equiv]"/>
 <!--
 STRUCTURE
 -->
   <xsl:template match="html:html">
-    <xsl:value-of select="$lf"/>
     <TEI>
       <xsl:apply-templates select="node() | @*"/>
     </TEI>
@@ -57,12 +57,35 @@ STRUCTURE
   </xsl:template>
   <!-- no hierachical grouping ? -->
   <xsl:template match="html:div">
+    <xsl:variable name="mixed">
+      <xsl:for-each select="text()">
+        <xsl:value-of select="normalize-space(.)"/>
+      </xsl:for-each>
+    </xsl:variable>   
     <xsl:choose>
+      <xsl:when test="$mixed = '' and count(*) = 1 and *[@class='pagenum']">
+        <xsl:apply-templates/>
+      </xsl:when>
       <!-- div to cut -->
       <xsl:when test="contains(' siteNotice jump-to-nav footer ', concat(' ', @id, ' '))"/>
       <!-- div to cross -->
       <xsl:when test="contains(' mw-content-text ', concat(' ', @id, ' '))">
         <xsl:apply-templates/>
+      </xsl:when>
+      <xsl:when test="contains(@class, 'stanza')">
+        <lg>
+          <xsl:apply-templates select="@xml:id | @xml:lang | @lang | @id "/>
+          <xsl:apply-templates/>
+        </lg>
+      </xsl:when>
+      <xsl:when test=" (@class='header' or @class='heading') and (html:h1|html:h2|html:h3|html:h4)">
+        <xsl:apply-templates/>
+      </xsl:when>
+      <xsl:when test="contains(@class, 'poetry')">
+        <div type="poem">
+          <xsl:apply-templates select="@xml:id | @xml:lang | @lang | @id "/>
+          <xsl:apply-templates/>
+        </div>
       </xsl:when>
       <xsl:when test="contains(@class, 'poem')">
         <quote>
@@ -153,11 +176,25 @@ BLOCKS
     </quote>
   </xsl:template>
   <xsl:template match="html:p">
+    <xsl:variable name="mixed">
+      <xsl:for-each select="text()">
+        <xsl:value-of select="normalize-space(.)"/>
+      </xsl:for-each>
+    </xsl:variable>   
     <xsl:if test="contains(@class, 'p2')">
       <p/>
     </xsl:if>
     <xsl:choose>
-      <xsl:when test="@class ='annee' ">
+      <xsl:when test="$mixed = '' and count(*) = 1 and *[@class='pagenum']">
+        <xsl:apply-templates/>
+      </xsl:when>
+      <xsl:when test="ancestor::html:div[@class='poetry' or @class='stanza' or @class='poem'] ">
+        <l>
+          <xsl:apply-templates select="@xml:id | @xml:lang | @lang | @id "/>
+          <xsl:apply-templates/>
+        </l>
+      </xsl:when>
+      <xsl:when test="@class ='annee' or @class ='date' ">
         <dateline>
           <xsl:apply-templates select="@xml:id | @xml:lang | @lang | @id "/>
           <xsl:apply-templates/>
@@ -292,6 +329,12 @@ PHRASES
       </xsl:when>
       <xsl:when test="contains(@class, 'pagenum')">
         <pb n="{@id}"/>
+      </xsl:when>
+      <!-- span class="i3 smcap" -->
+      <xsl:when test="contains(@class, 'smcap') and ancestor::*[@class='quote']">
+        <author>
+          <xsl:apply-templates/>
+        </author>
       </xsl:when>
       <xsl:when test=". = ''">
         <xsl:apply-templates/>

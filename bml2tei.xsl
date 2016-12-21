@@ -1,10 +1,7 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<xsl:stylesheet 
-  xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
-  xmlns:bml="http://efele.net/2010/ns/bml"
-  xmlns="http://www.tei-c.org/ns/1.0" 
-  version="1.1">
-  <xsl:output encoding="UTF-8" method="xml" media-type="text/html" />
+<xsl:transform exclude-result-prefixes="bml" version="1.0" xmlns="http://www.tei-c.org/ns/1.0" xmlns:bml="http://efele.net/2010/ns/bml" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+  <xsl:output encoding="UTF-8" indent="yes" media-type="text/html" method="xml"/>
+  <xsl:key match="*[@id]" name="id" use="@id"/>
   <xsl:variable name="caps">ABCDEFGHIJKLMNOPQRSTUVWXYZÆŒÇÀÁÂÃÄÅÈÉÊËÌÍÎÏÒÓÔÕÖÙÚÛÜÝ</xsl:variable>
   <xsl:variable name="mins">abcdefghijklmnopqrstuvwxyzæœçàáâãäåèéêëìíîïòóôõöùúûüý</xsl:variable>
   <xsl:template match="node()|@*">
@@ -12,15 +9,93 @@
       <xsl:apply-templates select="node()|@*"/>
     </xsl:copy>
   </xsl:template>
+  <xsl:template match="@id">
+    <xsl:attribute name="xml:id">
+      <xsl:value-of select="."/>
+    </xsl:attribute>
+  </xsl:template>
+  <xsl:template match="bml:l/@cont">
+    <xsl:attribute name="part">
+      <xsl:choose>
+        <xsl:when test=". = 'true'">F</xsl:when>
+        <xsl:otherwise>Y</xsl:otherwise>
+      </xsl:choose>
+    </xsl:attribute>
+  </xsl:template>
   <xsl:template match="bml:bml">
-    <TEI>
+    <xsl:text disable-output-escaping="yes"><![CDATA[<?xml-stylesheet type="text/xsl" href="../Teinte/tei2html.xsl"?>
+<?xml-model href="http://oeuvres.github.io/Teinte/teinte.rng" type="application/xml" schematypens="http://relaxng.org/ns/structure/1.0"?>
+]]></xsl:text>
+    <TEI xml:lang="fr">
       <teiHeader>
-        <!-- TODO -->
+        <fileDesc>
+          <titleStmt>
+            <title>
+              <xsl:apply-templates select="/bml:bml/bml:metadata/bml:electronique/bml:titre/node()"/>
+            </title>
+            <author>
+              <xsl:attribute name="key">
+                <xsl:value-of select="/bml:bml/bml:metadata/bml:monographie/bml:auteur/bml:nom-bibliographie"/>
+                <xsl:text> (</xsl:text>
+                <xsl:value-of select="/bml:bml/bml:metadata/bml:monographie/bml:auteur/bml:dates"/>
+                <xsl:text>)</xsl:text>
+              </xsl:attribute>
+              <xsl:value-of select="/bml:bml/bml:metadata/bml:monographie/bml:auteur/bml:nom-couverture"/>
+            </author>
+          </titleStmt>
+          <publicationStmt>
+            <publisher>GitHub</publisher>
+          </publicationStmt>
+          <sourceDesc>
+            <bibl>
+              <ref>
+                <xsl:attribute name="target">
+                  <xsl:value-of select="/bml:bml/bml:metadata/bml:electronique/@identificateur"/>
+                </xsl:attribute>
+                <xsl:value-of select="/bml:bml/bml:metadata/bml:electronique/@identificateur"/>
+              </ref>
+            </bibl>
+          </sourceDesc>
+        </fileDesc>
+        <profileDesc>
+          <creation>
+            <date>
+              <xsl:attribute name="when">
+                <xsl:value-of select="/bml:bml/bml:metadata/bml:monographie/bml:date"/>
+              </xsl:attribute>
+              <xsl:value-of select="/bml:bml/bml:metadata/bml:monographie/bml:date"/>
+              </date>
+          </creation>
+          <langUsage>
+            <language ident="fr"/>
+          </langUsage>
+        </profileDesc>
       </teiHeader>
       <text>
         <xsl:apply-templates select="bml:page-sequences"/>
       </text>
     </TEI>
+  </xsl:template>
+  <!-- <vsep xmlns="http://efele.net/2010/ns/bml" rend="threestars"/> -->
+  <xsl:template match="bml:vsep">
+    <ab type="ornament">
+      <xsl:choose>
+        <xsl:when test="@rend='threestars'">
+          <xsl:attribute name="rend">center</xsl:attribute>
+        </xsl:when>
+        <xsl:when test="@rend != ''">
+          <xsl:attribute name="rend">
+            <xsl:value-of select="@rend"/>
+          </xsl:attribute>
+        </xsl:when>
+        <xsl:otherwise>
+          <xsl:attribute name="rend">center</xsl:attribute>
+        </xsl:otherwise>
+      </xsl:choose>
+      <xsl:text>*</xsl:text>
+      <lb/>
+      <xsl:text>* *</xsl:text>
+    </ab>
   </xsl:template>
   <xsl:template match="bml:page-sequences">
     <body>
@@ -28,14 +103,31 @@
     </body>
   </xsl:template>
   <xsl:template match="bml:page-sequence">
-    <div>
-      <xsl:apply-templates select="node()|@*"/>
-    </div>
+    <xsl:choose>
+      <xsl:when test="count(bml:div) = 1">
+        <xsl:apply-templates select="node()|@*"/>
+      </xsl:when>
+      <xsl:otherwise>
+        <div>
+          <xsl:apply-templates select="node()|@*"/>
+        </div>
+      </xsl:otherwise>
+    </xsl:choose>
   </xsl:template>
   <xsl:template match="bml:p">
     <p>
       <xsl:apply-templates select="node()|@*"/>
     </p>
+  </xsl:template>
+  <xsl:template match="bml:div">
+    <div>
+      <xsl:apply-templates select="node()|@*"/>
+    </div>
+  </xsl:template>
+  <xsl:template match="bml:h1 | bml:h2">
+    <head>
+      <xsl:apply-templates select="node()|@*"/>
+    </head>
   </xsl:template>
   <xsl:template match="bml:p/@class">
     <xsl:attribute name="rend">
@@ -47,10 +139,30 @@
       </xsl:choose>
     </xsl:attribute>
   </xsl:template>
+  <xsl:template match="bml:p/@class">
+    <xsl:choose>
+      <xsl:when test=". = 'c'">
+        <xsl:attribute name="rend">center</xsl:attribute>
+      </xsl:when>
+      <xsl:when test=". = 'cont'">
+        <xsl:attribute name="part">F</xsl:attribute>
+      </xsl:when>
+      <xsl:otherwise>
+        <xsl:attribute name="rend">
+          <xsl:value-of select="."/>
+        </xsl:attribute>
+      </xsl:otherwise>
+    </xsl:choose>
+  </xsl:template>
   <xsl:template match="bml:i">
-    <hi rend="i">
+    <emph>
       <xsl:apply-templates select="node()|@*"/>
-    </hi>
+    </emph>
+  </xsl:template>
+  <xsl:template match="bml:i/bml:r">
+    <emph>
+      <xsl:apply-templates select="node()|@*"/>
+    </emph>
   </xsl:template>
   <xsl:template match="bml:sup">
     <hi rend="sup">
@@ -69,6 +181,11 @@
     <signed>
       <xsl:apply-templates select="node()|@*"/>
     </signed>
+  </xsl:template>
+  <xsl:template match="bml:epigraphe">
+    <epigraph>
+      <xsl:apply-templates select="node()|@*"/>
+    </epigraph>
   </xsl:template>
   <xsl:template match="bml:salutation">
     <salute>
@@ -98,7 +215,7 @@
       <xsl:choose>
         <xsl:when test="bml:poem">
           <xsl:attribute name="type">poem</xsl:attribute>
-        </xsl:when>     
+        </xsl:when>
       </xsl:choose>
       <xsl:apply-templates/>
     </quote>
@@ -125,6 +242,11 @@
     <label>
       <xsl:apply-templates select="node()|@*"/>
     </label>
+  </xsl:template>
+  <xsl:template match="bml:speaker">
+    <speaker>
+      <xsl:apply-templates select="node()|@*"/>
+    </speaker>
   </xsl:template>
   <xsl:template match="bml:l">
     <l>
@@ -188,7 +310,7 @@
   </xsl:template>
   <xsl:template match="bml:correction/@original">
     <xsl:attribute name="n">
-      <xsl:apply-templates/>
+      <xsl:value-of select="."/>
     </xsl:attribute>
   </xsl:template>
   <xsl:template match="bml:table">
@@ -204,7 +326,6 @@
       <xsl:apply-templates select="node()|@*"/>
     </row>
   </xsl:template>
-  
   <xsl:template match="bml:td">
     <cell>
       <xsl:apply-templates select="@*"/>
@@ -220,12 +341,18 @@
   <xsl:template match="@text-align | @vertical-align"/>
   <xsl:template match="@colspan">
     <xsl:attribute name="cols">
-      <xsl:apply-templates/>
+      <xsl:value-of select="."/>
     </xsl:attribute>
   </xsl:template>
   <xsl:template match="@rowspan">
     <xsl:attribute name="rows">
-      <xsl:apply-templates/>
+      <xsl:value-of select="."/>
     </xsl:attribute>
   </xsl:template>
-</xsl:stylesheet>
+  <xsl:template match="bml:notes"/>
+  <xsl:template match="bml:noteref">
+    <note>
+      <xsl:apply-templates select="key('id', @noteid)/node()"/>
+    </note>
+  </xsl:template>
+</xsl:transform>

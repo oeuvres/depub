@@ -9,14 +9,19 @@ class Depub
 {
   /** Pointeur sur l’objet zip, privé ou public ? */
   private $_zip;
-  /** file freshness */
+  /** epub freshness */
   private $_filemtime;
+  /** epub file name */
+  private $_basename;
+  /** toc basedir to resolve html links */
+  private $_tocdir;
   /** buffer html */
   private $_html;
-  /** ??  */
-  private $_navDir;
-  /** las nav point */
-  private $_navPoint;
+  /** keep memory of where to insert html content */
+  private $_lastpoint;
+  /** TODO, vérifier que la toc passe à travers tous les fichiers html */
+  private $_tocfiles = array();
+
 
   /**
    * Constructeur, autour d‘un fichier epub local
@@ -29,20 +34,20 @@ class Depub
   {
     $this->_filemtime = filemtime( $epubfile );
     $this->_zip = new ZipArchive();
-    $basename = basename( $epubfile);
+    $this->_basename = basename( $epubfile);
     if ( ($err=$this->_zip->open( $epubfile )) !== TRUE ) {
       // http://php.net/manual/fr/ziparchive.open.php
       if ( $err == ZipArchive::ER_NOZIP ) throw new Exception( $basename." n’est pas un zip" );
-      else throw new Exception( $basename." impossible à ouvrir" );
+      else throw new Exception( $this->_basename." impossible à ouvrir" );
     }
     if ( ($cont = $this->_zip->getFromName('META-INF/container.xml')) === FALSE ) {
-      throw new Exception( $basename.', container.xml introuvable' );
+      throw new Exception( $this->_basename.', container.xml introuvable' );
     }
     if ( !preg_match( '@full-path="([^"]+)"@', $cont, $matches ) ) {
-      throw new Exception( $basename.', pas de lien au fichier opf' );
+      throw new Exception( $this->_basename.', pas de lien au fichier opf' );
     }
     if ( ($cont = $this->_zip->getFromName( $matches[1]) ) === FALSE ) {
-      throw new Exception( $basename.'#'.$matches[1].' introuvable (container opf)' );
+      throw new Exception( $this->_basename.'#'.$matches[1].' introuvable (container opf)' );
     }
     $opfdir = dirname( $matches[1] );
     if ( $opfdir == ".") $opfdir = "";
@@ -53,8 +58,9 @@ class Depub
     $xpath->registerNamespace("opf", "http://www.idpf.org/2007/opf" );
     // pas de concaténation de String
     $this->_html = array();
-    $this->_html[] = "<!DOCTYPE html>";
-    $this->_html[] = "<html>";
+    $this->_html[] = '<?xml version="1.0" encoding="utf-8"?>';
+    $this->_html[] = '<!DOCTYPE html>';
+    $this->_html[] = '<html xmlns="http://www.w3.org/1999/xhtml">';
     $this->_html[] = "  <head>";
     $this->meta( $opf ); // ou bien xpath ?
     $this->_html[] = "  </head>";
@@ -68,12 +74,15 @@ class Depub
       $tochref = $nl->item(0)->getAttribute("href");
       if ( $tochref[0] != "/") $tochref = $opfdir.$tochref;
       if ( ($cont = $this->_zip->getFromName( $tochref ) ) === FALSE ) {
-        throw new Exception( $basename.'#'.$tochref.' introuvable (toc ncx)' );
+        throw new Exception( $this->_basename.'#'.$tochref.' introuvable (toc ncx)' );
       }
+      $this->_tocdir = dirname( $tochref );
+      if ( $this->_tocdir == ".") $this->_tocdir = "";
+      else $this->_tocdir.="/";
+
       $toc = self::dom( $cont );
-      $this->_html[] = "    <article>";
       $this->ncxrecurs( $toc->getElementsByTagName("navMap") );
-      $this->_html[] = "    </article>";
+
     }
     else {
       // toc xhtml ?
@@ -100,7 +109,7 @@ class Depub
   /**
    * Produire les info en
    */
-  public function ncxrecurs( $nl, $margin="    " )
+  public function ncxrecurs( $nl, $margin="", $first=true )
   {
     $indent="  ";
     if ( !$nl->length ) return;
@@ -108,24 +117,81 @@ class Depub
     foreach ($nl as $node ) {
       if ( $node->nodeType != XML_ELEMENT_NODE ) continue;
       $name = $node->tagName;
-      $this->_html[] = "<!-- ".$name." -->";
       if ( $name == "navLabel" ) {
         $title = trim( $node->textContent );
         $title = preg_replace("/\s+/", " ", $title);
-        $this->_html[] = $margin.'<section title="'.$title.'">';
+        $this->_html[] = $margin.'<section title="'.$title.'" class="toc">';
       }
       else if ( $name == "content" ) {
-        $this->_html[] = $margin.$indent.'<!-- '.$node->getAttribute("src").' -->';
+        $src = $node->getAttribute("src");
+        $this->_html[] = $src;
+        // on connait la fin du précédent chunk, on peut choper le bout de html
+        if ( $this->_lastpoint ) {
+          $this->_html[ $this->_lastpoint ] = $this->chop( $this->_html[ $this->_lastpoint ], $src );
+        }
+        $this->_lastpoint = count( $this->_html )-1;
       }
       else if ( $name == "navMap" ) {
-        $this->ncxrecurs( $node->childNodes, $margin.$indent );
+        $this->ncxrecurs( $node->childNodes, $margin.$indent, false );
       }
       else if ( $name == "navPoint" ) {
-        $this->ncxrecurs( $node->childNodes, $margin.$indent );
+        $this->ncxrecurs( $node->childNodes, $margin.$indent, false );
       }
     }
     // une section a été ouverte, la refermer
     if ($title) $this->_html[] = $margin.'</section>';
+    // finir le travail sur le dernier fichier
+    if ( $first ) $this->_html[ $this->_lastpoint ] = $this->chop( $this->_html[ $this->_lastpoint ], null );
+  }
+  /**
+   * Choper un bout de html dans le zip
+   */
+  public function chop( $from, $to )
+  {
+    $fromfile = $from;
+    $fromanchor = "";
+    if ( $pos = strpos($from, '#') )
+      list ( $fromfile, $fromanchor ) = explode( "#", $from );
+    $tofile = $to;
+    $toanchor = "";
+    if ( $pos = strpos($to, '#') )
+      list ( $tofile, $toanchor ) = explode( "#", $to );
+    // normalement, le texte à insérer est contenu dans un seul fichier
+    // sauf dans le cas où il y a des fichiers dans le <spine> (ordre de navigation)
+    // qui ne sont pas dans la toc
+    // TODO ? lire le spine
+    // TODO
+    if ( ( $html = $this->_zip->getFromName( $this->_tocdir.$fromfile ) ) === FALSE ) {
+      throw new Exception( $this->_basename.'#'.$fromfile.' dans la toc mais introuvable' );
+    }
+    //
+    if ( $fromanchor ) {
+      if ( !preg_match( '@<([^ >]+)[^>]*id="'.$fromanchor.'"[^>]*>@', $html, $matches, PREG_OFFSET_CAPTURE) )
+        throw new Exception( $this->_basename.'#'.$fromfile.' '.$fromanchor.' ancre non trouvée' );
+      $startpos = $matches[0][1];
+    }
+    else {
+      if ( !preg_match( '@<body[^>]*>@', $html, $matches, PREG_OFFSET_CAPTURE) )
+        throw new Exception( $this->_basename.'#'.$fromfile.' pas de balise <body>' );
+      $startpos = $matches[0][1]+strlen( $matches[0][0] );
+    }
+    if ( $fromfile == $tofile ) {
+      if ( !$toanchor )
+        throw new Exception( $this->_basename.'#'.$fromfile.' incohérence d’ancre dans la toc' );
+      if ( !preg_match( '@<([^ >]+)[^>]*id="'.$toanchor.'"[^>]*>@', $html, $matches, PREG_OFFSET_CAPTURE) )
+        throw new Exception( $this->_basename.'#'.$fromfile.' '.$fromanchor.' ancre non trouvée' );
+      $endpos = $matches[0][1];
+    }
+    // fin de fichier
+    else {
+      if ( !preg_match( '@</body>@', $html, $matches, PREG_OFFSET_CAPTURE) )
+        $endpos = strlen( $html );
+      else
+        $endpos = $matches[0][1];
+    }
+
+    // même fichier, ancres d
+    return "<!-- ".$from." -> ".$to." -->\n".substr( $html, $startpos, $endpos - $startpos );
   }
   /**
    * From an xml String, build a good dom with right options

@@ -162,7 +162,8 @@ class Depub
     // TODO ? lire le spine
     // TODO
     if ( ( $html = $this->_zip->getFromName( $this->_tocdir.$fromfile ) ) === FALSE ) {
-      throw new Exception( $this->_basename.'#'.$fromfile.' dans la toc mais introuvable' );
+      // throw new Exception( $this->_basename.'#'.$fromfile.' dans la toc mais introuvable' );
+      return "<!-- ERROR ".$this->_tocdir.$fromfile." indiqué dans la toc mais introuvable -->";
     }
     //
     if ( $fromanchor ) {

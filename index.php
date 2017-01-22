@@ -12,8 +12,14 @@ if ($upload) {
   // if ($upload['extension'] == 'xml' || $upload['extension'] == 'tei')
   $srcfile = $upload['tmp_name'];
   $depub = new Depub( $srcfile );
-  header ("Content-Type: text/plain; charset=UTF-8");
-  echo $depub->html();
+  if ( isset($_REQUEST['html']) ) {
+    header ("Content-Type: text/plain; charset=UTF-8");
+    echo $depub->html();
+  }
+  else {
+    header ("Content-Type: text/xml; charset=UTF-8");
+    echo $depub->tei();
+  }
   exit();
 }
 
@@ -40,7 +46,8 @@ function changeAction(form, ext) {
 }
       </script>
       <input type="file" size="70" name="file" accept="application/epub+zip"/>
-      <button name="html" onmousedown="changeAction(this.form, \'.html\'); " title="Transformation vers HTML" type="submit">HTML</button>
+      <button name="html" onmousedown="changeAction(this.form, '.html'); " title="Transformation vers HTML" type="submit">HTML</button>
+      <button name="tei" onmousedown="changeAction(this.form, '.xml'); " title="Transformation vers XML/TEI" type="submit">XML/TEI</button>
     </form>
   </body>
 </html>

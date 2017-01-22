@@ -48,6 +48,7 @@ STRUCTURE
   <xsl:template match="html:section | html:article">
     <div type="{local-name()}">
       <xsl:apply-templates select="@*"/>
+      <xsl:apply-templates/>
     </div>
   </xsl:template>
   <xsl:template match="html:img">
@@ -279,7 +280,7 @@ BLOCKS
 PHRASES
   -->
   <!-- typographic phrasing -->
-  <xsl:template match="html:b | html:i | html:small | html:sub | html:u">
+  <xsl:template match="html:b | html:small | html:sub | html:u">
     <hi>
       <xsl:apply-templates select="@*"/>
       <xsl:attribute name="rend">
@@ -291,6 +292,12 @@ PHRASES
       </xsl:attribute>
       <xsl:apply-templates/>
     </hi>
+  </xsl:template>
+  <xsl:template match="html:i">
+    <emph>
+      <xsl:apply-templates select="@*"/>
+      <xsl:apply-templates/>
+    </emph>
   </xsl:template>
   <!-- -->
   <xsl:template match="html:sup">
@@ -377,7 +384,7 @@ PHRASES
         <xsl:apply-templates/>
       </xsl:when>
       <xsl:otherwise>
-        <hi>
+        <seg>
           <xsl:apply-templates select="@*"/>
           <xsl:attribute name="rend">
             <xsl:choose>
@@ -389,7 +396,7 @@ PHRASES
             </xsl:choose>
           </xsl:attribute>
           <xsl:apply-templates/>
-        </hi>
+        </seg>
       </xsl:otherwise>
     </xsl:choose>
   </xsl:template>
@@ -466,7 +473,17 @@ PHRASES
     </xsl:attribute>
   </xsl:template>
   <xsl:template match="@class">
-    <xsl:attribute name="rend">
+    <xsl:choose>
+      <xsl:when test="starts-with(., 'msonormal')"/>
+      <xsl:otherwise>
+        <xsl:attribute name="rend">
+          <xsl:value-of select="."/>
+        </xsl:attribute>
+      </xsl:otherwise>
+    </xsl:choose>
+  </xsl:template>
+  <xsl:template match="@title">
+    <xsl:attribute name="n">
       <xsl:value-of select="."/>
     </xsl:attribute>
   </xsl:template>

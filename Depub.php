@@ -96,7 +96,19 @@ class Depub
    */
   public function html()
   {
-    return implode( "\n", $this->_html);
+    return implode( "\n", $this->_html );
+  }
+  /**
+   * Sortir le fichier Tei
+   */
+  public function tei()
+  {
+    $html = self::dom( implode( "\n", $this->_html) );
+    $xsl = new DOMDocument();
+    $xsl->load( dirname(__FILE__)."/html2tei.xsl" );
+    $trans = new XSLTProcessor();
+    $trans->importStyleSheet( $xsl );
+    return $trans->transformToXML( $html );
   }
   /**
    * Extraire les métadonnées en html
@@ -202,7 +214,7 @@ class Depub
     $dom->preserveWhiteSpace = false;
     $dom->formatOutput=true;
     $dom->substituteEntities=true;
-    $dom->loadXML($xml, LIBXML_NOENT | LIBXML_NONET | LIBXML_NSCLEAN | LIBXML_NOCDATA | LIBXML_COMPACT | LIBXML_PARSEHUGE | LIBXML_NOWARNING);
+    $dom->loadXML($xml, LIBXML_NOENT | LIBXML_NONET | LIBXML_NSCLEAN | LIBXML_NOCDATA | LIBXML_COMPACT | LIBXML_PARSEHUGE | LIBXML_NOWARNING );
     return $dom;
   }
 

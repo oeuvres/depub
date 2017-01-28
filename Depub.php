@@ -1,4 +1,5 @@
 <?php
+Depub::init();
 // pour appel en ligne de commande
 if ( php_sapi_name() == "cli" ) Depub::cli();
 /**
@@ -7,6 +8,7 @@ if ( php_sapi_name() == "cli" ) Depub::cli();
  */
 class Depub
 {
+
   /** Pointeur sur l’objet zip, privé ou public ? */
   private $_zip;
   /** epub freshness */
@@ -21,7 +23,31 @@ class Depub
   private $_lastpoint;
   /** TODO, vérifier que la toc passe à travers tous les fichiers html */
   private $_tocfiles = array();
-
+  /** Log level for web, do not output  */
+  public $loglevel = E_ALL;
+  /** A logger, maybe a stream or a callable, used by $this->log() */
+  private $_logger;
+  /** Initialisation done */
+  private static $_init;
+  /** To wash html */
+  public static $rehtml;
+  /** Config for tidy html, used for inserted fragments */
+  public static $tidyconf = array(
+    'clean' => true,
+    'doctype' => "omit",
+    'force-output' => true,
+    // 'indent' => true, // fait pas xsl
+    'input-encoding' => "utf8", // ?? OK ?
+    'newline' => "LF",
+    // 'new-blocklevel-tags' => 'section',
+    // 'numeric-entities' => false,
+    'output-encoding' => "utf8",
+    'output-xhtml' => true, // will strip unknown html5 tags, use new-blocklevel-tags
+    // 'output-xml' => true,
+    'quote-nbsp' => false,
+    'wrap' => false,
+    'show-body-only' => true,
+  );
 
   /**
    * Constructeur, autour d‘un fichier epub local
@@ -30,24 +56,34 @@ class Depub
    * — dans container.xml, trouver le chemin vers content.opf
    * — dans content.opf chercher le lien vers
    */
-  public function __construct( $epubfile )
+  public function __construct( $epubfile, $logger="php://output" )
   {
+    if (is_string($logger)) $logger = fopen($logger, 'w');
+    $this->_logger = $logger;
+
     $this->_filemtime = filemtime( $epubfile );
     $this->_zip = new ZipArchive();
     $this->_basename = basename( $epubfile);
     if ( ($err=$this->_zip->open( $epubfile )) !== TRUE ) {
       // http://php.net/manual/fr/ziparchive.open.php
-      if ( $err == ZipArchive::ER_NOZIP ) throw new Exception( $basename." n’est pas un zip" );
-      else throw new Exception( $this->_basename." impossible à ouvrir" );
+      if ( $err == ZipArchive::ER_NOZIP ) {
+        $this->log( E_USER_ERROR, $this->_basename." n’est pas un zip" );
+        return;
+      }
+      $this->log( E_USER_ERROR, $this->_basename." impossible à ouvrir" );
+      return;
     }
     if ( ($cont = $this->_zip->getFromName('META-INF/container.xml')) === FALSE ) {
-      throw new Exception( $this->_basename.', container.xml introuvable' );
+      $this->log( E_USER_ERROR, $this->_basename.', container.xml introuvable' );
+      return;
     }
     if ( !preg_match( '@full-path="([^"]+)"@', $cont, $matches ) ) {
-      throw new Exception( $this->_basename.', pas de lien au fichier opf' );
+      $this->log( E_USER_ERROR, $this->_basename.', pas de lien au fichier opf' );
+      return;
     }
     if ( ($cont = $this->_zip->getFromName( $matches[1]) ) === FALSE ) {
-      throw new Exception( $this->_basename.'#'.$matches[1].' introuvable (container opf)' );
+      $this->log( E_USER_ERROR, $this->_basename.'#'.$matches[1].' introuvable (container opf)' );
+      return;
     }
     $opfdir = dirname( $matches[1] );
     if ( $opfdir == ".") $opfdir = "";
@@ -62,7 +98,10 @@ class Depub
     $this->_html[] = '<!DOCTYPE html>';
     $this->_html[] = '<html xmlns="http://www.w3.org/1999/xhtml">';
     $this->_html[] = "  <head>";
-    $this->meta( $opf ); // ou bien xpath ?
+    $this->_html[] = '  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />';
+    // $this->meta( $opf ); // ou bien xpath ?
+    $metadata = $opf->getElementsByTagName('metadata')->item(0);
+    $this->_html[] = $opf->saveXML( $metadata );
     $this->_html[] = "  </head>";
     $this->_html[] = "  <body>";
 
@@ -74,12 +113,12 @@ class Depub
       $tochref = $nl->item(0)->getAttribute("href");
       if ( $tochref[0] != "/") $tochref = $opfdir.$tochref;
       if ( ($cont = $this->_zip->getFromName( $tochref ) ) === FALSE ) {
-        throw new Exception( $this->_basename.'#'.$tochref.' introuvable (toc ncx)' );
+        $this->log( E_USER_ERROR, $this->_basename.'#'.$tochref.' introuvable (toc ncx)' );
+        return;
       }
       $this->_tocdir = dirname( $tochref );
       if ( $this->_tocdir == ".") $this->_tocdir = "";
       else $this->_tocdir.="/";
-
       $toc = self::dom( $cont );
       $this->ncxrecurs( $toc->getElementsByTagName("navMap") );
 
@@ -92,7 +131,7 @@ class Depub
     $this->_html[] = "";
   }
   /**
-   * Sortir le fichier html
+   * Output the concatenate html
    */
   public function html()
   {
@@ -103,21 +142,15 @@ class Depub
    */
   public function tei()
   {
-    $html = self::dom( implode( "\n", $this->_html) );
+
+    $html =  implode( "\n", $this->_html );
     $xsl = new DOMDocument();
     $xsl->load( dirname(__FILE__)."/html2tei.xsl" );
     $trans = new XSLTProcessor();
     $trans->importStyleSheet( $xsl );
-    return $trans->transformToXML( $html );
+    return $trans->transformToXML( self::dom($html) );
   }
-  /**
-   * Extraire les métadonnées en html
-   */
-  public function meta( $opf )
-  {
-    // TODO, charger les métadonnées quelque part
 
-  }
   /**
    * Produire les info en
    */
@@ -131,11 +164,13 @@ class Depub
       $name = $node->tagName;
       if ( $name == "navLabel" ) {
         $title = trim( $node->textContent );
-        $title = preg_replace("/\s+/", " ", $title);
+        $title = preg_replace("/\s+/u", " ", $title);
         $this->_html[] = $margin.'<section title="'.$title.'" class="toc">';
       }
       else if ( $name == "content" ) {
         $src = $node->getAttribute("src");
+        // @src is empty, trick to open a hierarchical section with no content
+        if ( !$src ) continue;
         $this->_html[] = $src;
         // on connait la fin du précédent chunk, on peut choper le bout de html
         if ( $this->_lastpoint ) {
@@ -160,6 +195,8 @@ class Depub
    */
   public function chop( $from, $to )
   {
+    $chop = array(); // html à retourner
+    $chop[] = "<!-- ".$from." -> ".$to." -->";
     $fromfile = $from;
     $fromanchor = "";
     if ( $pos = strpos($from, '#') )
@@ -172,57 +209,190 @@ class Depub
     // sauf dans le cas où il y a des fichiers dans le <spine> (ordre de navigation)
     // qui ne sont pas dans la toc
     // TODO ? lire le spine
-    // TODO
     if ( ( $html = $this->_zip->getFromName( $this->_tocdir.$fromfile ) ) === FALSE ) {
-      // throw new Exception( $this->_basename.'#'.$fromfile.' dans la toc mais introuvable' );
-      return "<!-- ERROR ".$this->_tocdir.$fromfile." indiqué dans la toc mais introuvable -->";
+      $msg = "  — WARNING ".$this->_tocdir.$fromfile." fichier indiqué mais introuvable";
+      $this->log( E_USER_WARNING, $msg );
+      return "<!-- $msg -->";
     }
-    //
-    if ( $fromanchor ) {
-      if ( !preg_match( '@<([^ >]+)[^>]*id="'.$fromanchor.'"[^>]*>@', $html, $matches, PREG_OFFSET_CAPTURE) )
-        throw new Exception( $this->_basename.'#'.$fromfile.' '.$fromanchor.' ancre non trouvée' );
-      $startpos = $matches[0][1];
-    }
-    else {
-      if ( !preg_match( '@<body[^>]*>@', $html, $matches, PREG_OFFSET_CAPTURE) )
-        throw new Exception( $this->_basename.'#'.$fromfile.' pas de balise <body>' );
-      $startpos = $matches[0][1]+strlen( $matches[0][0] );
-    }
-    if ( $fromfile == $tofile ) {
-      if ( !$toanchor )
-        throw new Exception( $this->_basename.'#'.$fromfile.' incohérence d’ancre dans la toc' );
-      if ( !preg_match( '@<([^ >]+)[^>]*id="'.$toanchor.'"[^>]*>@', $html, $matches, PREG_OFFSET_CAPTURE) )
-        throw new Exception( $this->_basename.'#'.$fromfile.' '.$fromanchor.' ancre non trouvée' );
-      $endpos = $matches[0][1];
-    }
-    // fin de fichier
-    else {
-      if ( !preg_match( '@</body>@', $html, $matches, PREG_OFFSET_CAPTURE) )
-        $endpos = strlen( $html );
-      else
-        $endpos = $matches[0][1];
-    }
+    // indent blocks with possible ids ?
+    /*
+    $html = preg_replace(
+      array(),
+      array(),
+      $html
+    )
+    */
 
-    // même fichier, ancres d
-    return "<!-- ".$from." -> ".$to." -->\n".substr( $html, $startpos, $endpos - $startpos );
+    // chercher l’index de début dans le fichier HTML
+    $startpos = 0;
+    if ( !preg_match( '@<body[^>]*>@', $html, $matches, PREG_OFFSET_CAPTURE) ) {
+      $msg = "  — WARNING ".$this->_basename.'#'.$fromfile.' pas de balise <body>';
+      $this->log( E_USER_WARNING, $msg );
+      $chop[] = "<!-- $msg -->";
+    }
+    else $startpos = $matches[0][1]+strlen( $matches[0][0] );
+    if ( $fromanchor ) {
+      // take start of line
+      // <h1 class="P_Heading_1"><span><a id="auto_bookmark_1"/>PROLOGUE</span></h1>
+      if ( !preg_match( '@\n.*id="'.$fromanchor.'"@', $html, $matches, PREG_OFFSET_CAPTURE) ) {
+        $msg = "  — WARNING ".$this->_basename.'#'.$fromfile.' '.$fromanchor.' risque de texte répliqué, ancre indiquée dans la toc mais non trouvée';
+        $this->log( E_USER_WARNING, $msg );
+        $chop[] = "<!-- $msg -->";
+      }
+      else $startpos = $matches[0][1];
+    }
+    // chercher l‘index de fin dans le fichier HTML
+    $endpos = strlen( $html );
+    if ( preg_match( '@</body>@', $html, $matches, PREG_OFFSET_CAPTURE) )
+      $endpos = $matches[0][1];
+    // le chapitre suivant commence dans le même fichier, il faut une ancre de fin
+    if ( $fromfile == $tofile ) {
+      // pas d’ancre de fin, risque de répliquer du texte
+      if ( !$toanchor ) {
+        $msg = "  — WARNING ".$this->_basename.'#'.$fromfile.' risque de texte répliqué ';
+        $this->log( E_USER_WARNING, $msg );
+        $chop[] = "<!-- $msg -->";
+      }
+      else if ( !preg_match( '@<([^ >]+)[^>]*id="'.$toanchor.'"[^>]*>@', $html, $matches, PREG_OFFSET_CAPTURE) ) {
+        $msg = "  — WARNING ".$this->_basename.'#'.$fromfile.' risque de texte répliqué, '.$fromanchor.' ancre non trouvée';
+        $this->log( E_USER_WARNING, $msg );
+        $chop[] = "<!-- $msg -->";
+      }
+      else {
+        $endpos = $matches[0][1];
+      }
+    }
+    $html = substr( $html, $startpos, $endpos - $startpos );
+    // entités HTML4 pourries
+    $html = html_entity_decode($html, ENT_QUOTES | ENT_HTML5 | ENT_XML1, 'UTF-8');
+    $html = preg_replace( self::$rehtml[0], self::$rehtml[1], $html );
+    $html = tidy_repair_string ( $html , self::$tidyconf);
+
+    $chop[] = $html;
+    return implode( $chop, "\n");
   }
+  /**
+   * Change basename after upload, for better comments
+   */
+  public function basename( $basename )
+  {
+    $this->_basename = $basename;
+  }
+
+  /**
+   * Custom error handler
+   * May be used for xsl:message coming from transform()
+   */
+  function log( $errno, $errstr, $errfile=null, $errline=null, $errcontext=null)
+  {
+    if ( !$this->loglevel & $errno ) return false;
+    $errstr=preg_replace("/XSLTProcessor::transform[^:]*:/", "", $errstr, -1, $count);
+    if ( !$this->_logger );
+    else if ( is_resource($this->_logger) ) fwrite( $this->_logger, $errstr."\n");
+    else if ( is_string($this->_logger) && function_exists( $this->_logger ) ) call_user_func( $this->_logger, $errstr );
+  }
+
+  /**
+   *
+   */
+  public static function init()
+  {
+    if (self::$_init) return;
+    self::$rehtml = self::sed2preg( dirname(__FILE__)."/html.sed" );
+    self::$_init = true;
+  }
+
+
+  /**
+   * Build a search/replace regexp table from a sed script
+   */
+  public static function sed2preg( $file ) {
+
+    $search=array();
+    $replace=array();
+    $handle = fopen( $file, "r");
+    while (( $l = fgets($handle)) !== false) {
+      $l = trim($l);
+      if ( !$l ) continue;
+      if ($l[0] == '#') continue;
+      if ($l[0] != 's') continue;
+      list($a,$s,$r)=explode($l[1], $l);
+      $search[]=$l[1].$s.$l[1].'u';
+      $replace[]=preg_replace('/\\\\([0-9]+)/', '\\$$1', $r);
+        // process the line read.
+    }
+    fclose($handle);
+    return array($search, $replace);
+  }
+
+
   /**
    * From an xml String, build a good dom with right options
    */
-  static function dom( $xml ) {
+  static function dom( $xml , $html=false )
+  {
     $dom = new DOMDocument();
     $dom->preserveWhiteSpace = false;
     $dom->formatOutput=true;
     $dom->substituteEntities=true;
-    $dom->loadXML($xml, LIBXML_NOENT | LIBXML_NONET | LIBXML_NSCLEAN | LIBXML_NOCDATA | LIBXML_COMPACT | LIBXML_PARSEHUGE | LIBXML_NOWARNING );
+    $dom->encoding = "UTF-8";
+    // libxml_use_internal_errors(true);
+    // recover could break section structure
+    // $dom->recover = true;
+    // if ( $html ) $dom->loadHTML($xml, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD | LIBXML_NOBLANKS | LIBXML_NOENT | LIBXML_NONET | LIBXML_NOWARNING | LIBXML_NOXMLDECL );
+    // LIBXML_NOERROR  | LIBXML_NSCLEAN  | LIBXML_NOCDATA
+    $dom->loadXML($xml, LIBXML_NOBLANKS | LIBXML_NOENT | LIBXML_NONET );
+    $errors = libxml_get_errors();
+    // faut-il faire quelque chose des erreurs ici ?
+    libxml_clear_errors();
+    $dom->encoding = "UTF-8";
     return $dom;
   }
 
-
   public static function cli()
   {
-    $depub = new Depub("test.epub");
-    echo $depub->html();
+    $actions = array( "html", "tei" );
+    array_shift($_SERVER['argv']); // shift first arg, the script filepath
+    if (!count($_SERVER['argv'])) exit('
+    usage     : php -f Depub.php ('.implode( $actions, "|").') destdir/? "*.epub"
+    format    : dest format
+    destdir/? : optional destdir
+    *.epub    : glob patterns are allowed, with or without quotes, win or nix
+
+');
+
+    $format="tei";
+    $ext = ".xml";
+    $test = trim($_SERVER['argv'][0], '- ');
+    if ( in_array( $test, $actions ) ) {
+      $format = $test;
+      array_shift($_SERVER['argv']);
+    }
+    if ( $format == "html" ) $ext = ".html";
+
+    $destdir = "";
+    $lastc = substr($_SERVER['argv'][0], -1);
+    if ('/' == $lastc || '\\' == $lastc) {
+      $destdir = array_shift($_SERVER['argv']);
+      $destdir = rtrim($destdir, '/\\').'/';
+      if (!file_exists($destdir)) {
+        mkdir($destdir, 0775, true);
+        @chmod($dir, 0775);  // let @, if www-data is not owner but allowed to write
+      }
+    }
+
+    while($glob = array_shift($_SERVER['argv']) ) {
+      foreach(glob($glob) as $srcfile) {
+        $destname = pathinfo( $srcfile, PATHINFO_FILENAME ).$ext;
+        // if ( !$destdir ) $destfile = dirname( $srcfile )."/".$destname;
+        $destfile = $destfile = $destdir.$destname;
+        fwrite (STDERR, $srcfile." => ".$destfile."\n");
+        $depub = new Depub( $srcfile );
+        if ( $format == "html" ) file_put_contents( $destfile, $depub->html() );
+        else file_put_contents( $destfile, $depub->tei() );
+        fwrite(STDERR, "\n");
+      }
+    }
   }
 }
 

@@ -3,12 +3,19 @@
   xmlns="http://www.tei-c.org/ns/1.0" 
   xmlns:html="http://www.w3.org/1999/xhtml"
   exclude-result-prefixes="html"
-  extension-element-prefixes=""
+
+  xmlns:exslt="http://exslt.org/common"
+  xmlns:date="http://exslt.org/dates-and-times"
+  xmlns:php="http://php.net/xsl"
+  extension-element-prefixes="date exslt php"
   >
   <xsl:output indent="yes" encoding="UTF-8" method="xml" omit-xml-declaration="yes"/>
   <xsl:variable name="lf" select="'&#10;'"/>
-  <xsl:variable name="ABC">ABCDEFGHIJKLMNOPQRSTUVWXYZÀÂÄÆÇÉÈÊËÎÏÑÔÖŒÙÛÜ</xsl:variable>
-  <xsl:variable name="abc">abcdefghijklmnopqrstuvwxyzàâäæçéèêëîïñôöœùûü</xsl:variable>
+  <xsl:variable name="ÂBC">ABCDEFGHIJKLMNOPQRSTUVWXYZÀÂÄÆÇÉÈÊËÎÏÑÔÖŒÙÛÜ _-,1234567890</xsl:variable>
+  <xsl:variable name="âbc">abcdefghijklmnopqrstuvwxyzàâäæçéèêëîïñôöœùûü</xsl:variable>
+  <xsl:variable name="abc">abcdefghijklmnopqrstuvwxyzaaaeceeeeiinooeuuu</xsl:variable>
+  <xsl:variable name="sheet" select="document('styles.xml', document(''))"/>
+  
 
   <xsl:template match="html:*">
     <xsl:element name="{local-name()}">
@@ -26,6 +33,15 @@
 STRUCTURE
 -->
   <xsl:template match="html:html">
+    <xsl:processing-instruction name="xml-model"> href="http://oeuvres.github.io/Teinte/teinte.rng" type="application/xml" schematypens="http://relaxng.org/ns/structure/1.0"</xsl:processing-instruction>
+    <xsl:if test="function-available('date:date-time')">
+      <xsl:value-of select="$lf"/>
+      <xsl:comment>
+        <xsl:text>Odette: </xsl:text>
+        <xsl:value-of select="date:date-time()"/>
+      </xsl:comment>
+    </xsl:if>
+    
     <TEI>
       <xsl:apply-templates select="node() | @*"/>
     </TEI>
@@ -58,50 +74,25 @@ STRUCTURE
   </xsl:template>
   <!-- no hierachical grouping ? -->
   <xsl:template match="html:div">
+    <xsl:variable name="class" select="translate(@class, $ÂBC, $abc)"/>
+    <xsl:variable name="id" select="translate(@id, $ÂBC, $abc)"/>
+    <xsl:variable name="mapping" select="$sheet/*/*[@name=$class or @id=$id][not(@html) or @html='div'][1]"/>
     <xsl:variable name="mixed">
       <xsl:for-each select="text()">
         <xsl:value-of select="normalize-space(.)"/>
       </xsl:for-each>
-    </xsl:variable>   
+    </xsl:variable>
     <xsl:choose>
+      <xsl:when test="normalize-space(.) = ''"/>
+      <xsl:when test="$mixed = '' and not(*[local-name() != 'img'])"/>
+      <xsl:when test="$mapping">
+        <xsl:call-template name="mapping">
+          <xsl:with-param name="mapping" select="$mapping"/>
+        </xsl:call-template>
+      </xsl:when>
       <xsl:when test="$mixed = '' and count(*) = 1 and *[@class='pagenum']">
         <xsl:apply-templates/>
       </xsl:when>
-      <!-- div to cut -->
-      <xsl:when test="contains(' siteNotice jump-to-nav footer ', concat(' ', @id, ' '))"/>
-      <!-- div to cross -->
-      <xsl:when test="contains(' mw-content-text ', concat(' ', @id, ' '))">
-        <xsl:apply-templates/>
-      </xsl:when>
-      <xsl:when test="contains(@class, 'stanza')">
-        <lg>
-          <xsl:apply-templates select="@xml:id | @xml:lang | @lang | @id "/>
-          <xsl:apply-templates/>
-        </lg>
-      </xsl:when>
-      <xsl:when test=" (@class='header' or @class='heading') and (html:h1|html:h2|html:h3|html:h4)">
-        <xsl:apply-templates/>
-      </xsl:when>
-      <xsl:when test="contains(@class, 'poetry')">
-        <div type="poem">
-          <xsl:apply-templates select="@xml:id | @xml:lang | @lang | @id "/>
-          <xsl:apply-templates/>
-        </div>
-      </xsl:when>
-      <xsl:when test="contains(@class, 'poem')">
-        <quote>
-          <xsl:apply-templates select="@xml:id | @xml:lang | @lang | @id "/>
-          <xsl:apply-templates/>
-        </quote>
-      </xsl:when>
-      <xsl:when test="@class = 'quote'">
-        <quote>
-          <xsl:apply-templates select="@*"/>
-          <xsl:apply-templates/>
-        </quote>
-      </xsl:when>
-      <!-- specific Gutenberg for Tocs -->
-      <xsl:when test="@class = 'index'"/>
       <xsl:otherwise>
         <div>
           <xsl:apply-templates select="@*"/>
@@ -110,6 +101,7 @@ STRUCTURE
       </xsl:otherwise>
     </xsl:choose>
   </xsl:template>
+  
   <!-- Wikisource -->
   <xsl:template match="html:ol[@class='references']">
     <div type="notes">
@@ -177,97 +169,49 @@ BLOCKS
     </quote>
   </xsl:template>
   <xsl:template match="html:p">
+    <xsl:variable name="class" select="translate(@class, $ÂBC, $abc)"/>
+    <xsl:variable name="id" select="translate(@id, $ÂBC, $abc)"/>
+    <xsl:variable name="mapping" select="$sheet/*/*[@name=$class or @id=$id][not(@html) or @html='p'][1]"/>
     <xsl:variable name="mixed">
       <xsl:for-each select="text()">
         <xsl:value-of select="normalize-space(.)"/>
       </xsl:for-each>
-    </xsl:variable>   
+    </xsl:variable>
+    <!-- vu où ? -->
     <xsl:if test="contains(@class, 'p2')">
       <p/>
     </xsl:if>
     <xsl:choose>
+      <xsl:when test="normalize-space(.) = '' and not(*[local-name != 'img'])">
+        <xsl:apply-templates/>
+      </xsl:when>
       <xsl:when test="$mixed = '' and count(*) = 1 and *[@class='pagenum']">
         <xsl:apply-templates/>
       </xsl:when>
+      <xsl:when test="$mapping">
+        <xsl:call-template name="mapping">
+          <xsl:with-param name="mapping" select="$mapping"/>
+        </xsl:call-template>
+      </xsl:when>
       <xsl:when test="ancestor::html:div[@class='poetry' or @class='stanza' or @class='poem'] ">
         <l>
-          <xsl:apply-templates select="@xml:id | @xml:lang | @lang | @id "/>
-          <xsl:apply-templates/>
+          <xsl:apply-templates select="node()|@*"/>
         </l>
-      </xsl:when>
-      <xsl:when test="@class ='annee' or @class ='date' ">
-        <dateline>
-          <xsl:apply-templates select="@xml:id | @xml:lang | @lang | @id "/>
-          <xsl:apply-templates/>
-        </dateline>
       </xsl:when>
       <xsl:when test=" @class = 'titre' ">
         <label>
-          <xsl:apply-templates select="@xml:id | @xml:lang | @lang | @id "/>
-          <xsl:apply-templates/>
+          <xsl:apply-templates select="@* | node()"/>
         </label>
-      </xsl:when>
-      <xsl:when test=" @class = 'citation' ">
-        <quote>
-          <xsl:apply-templates select="@xml:id | @xml:lang | @lang | @id "/>
-          <p>
-            <xsl:apply-templates/>
-          </p>
-        </quote>
-      </xsl:when>
-      <xsl:when test=" @class = 'resume' ">
-        <argument>
-          <xsl:apply-templates select="@xml:id | @xml:lang | @lang | @id "/>
-          <p>
-            <xsl:apply-templates/>
-          </p>
-        </argument>
-      </xsl:when>
-      <xsl:when test="contains(@class, 'poem')">
-        <lg>
-          <xsl:apply-templates select="@xml:id | @xml:lang | @lang | @id "/>
-          <xsl:apply-templates/>
-        </lg>
-      </xsl:when>
-      <xsl:when test="@class ='vers' ">
-        <l>
-          <xsl:apply-templates select="@xml:id | @xml:lang | @lang | @id "/>
-          <xsl:apply-templates/>
-        </l>
-      </xsl:when>
-      <xsl:when test="contains(@class, 'note')">
-        <note>
-          <xsl:apply-templates select="@xml:id | @xml:lang | @lang | @id | @n"/>
-          <xsl:apply-templates/>
-        </note>
-      </xsl:when>
-      <xsl:when test="contains(@class, 'acteur')">
-        <speaker>
-          <xsl:apply-templates select="@xml:id | @xml:lang | @lang | @id | @n"/>
-          <xsl:apply-templates/>
-        </speaker>
-      </xsl:when>
-      <xsl:when test="contains(@class, 'auteur')">
-        <bibl>
-          <xsl:apply-templates select="@xml:id | @xml:lang | @lang | @id | @n"/>
-          <xsl:apply-templates/>
-        </bibl>
-      </xsl:when>
-      <xsl:when test="contains(@class, 'quote')">
-        <quote>
-          <xsl:apply-templates select="@xml:id | @xml:lang | @lang | @id | @n"/>
-          <xsl:apply-templates/>
-        </quote>
       </xsl:when>
       <xsl:otherwise>
         <p>
-          <xsl:apply-templates select="@xml:id | @xml:lang | @lang | @id "/>
+          <xsl:apply-templates select="@*"/>
           <xsl:choose>
             <xsl:when test="@class = 'p2'"/>
-            <xsl:when test="not(@class) or @class=''"/>
+            <xsl:when test="$class=''"/>
             <xsl:otherwise>
               <xsl:attribute name="rend">
-                <xsl:value-of select="@class"/>
+                <xsl:value-of select="$class"/>
               </xsl:attribute>
             </xsl:otherwise>
           </xsl:choose>
@@ -280,7 +224,7 @@ BLOCKS
 PHRASES
   -->
   <!-- typographic phrasing -->
-  <xsl:template match="html:b | html:small | html:sub | html:u">
+  <xsl:template match="html:b | html:small | html:strong | html:sub | html:u">
     <hi>
       <xsl:apply-templates select="@*"/>
       <xsl:attribute name="rend">
@@ -324,24 +268,23 @@ PHRASES
     <lb/>
   </xsl:template>
   <xsl:template match="html:span">
+    <xsl:variable name="class" select="translate(@class, $ÂBC, $abc)"/>
+    <xsl:variable name="id" select="translate(@id, $ÂBC, $abc)"/>
+    <xsl:variable name="mapping" select="$sheet/*/*[@name=$class or @id=$id][not(@html) or @html='span'][1]"/>
     <xsl:choose>
-      <!-- Wikisource cut -->
-      <xsl:when test="contains(@class, 'mw-cite-backlink')"/>
-      <!-- Wikisource cross -->
-      <xsl:when test="contains(@class, 'mw-headline')">
-        <xsl:apply-templates/>
-      </xsl:when>
-      <xsl:when test="contains(@class, 'reference-text')">
-        <xsl:apply-templates/>
-      </xsl:when>
-      <xsl:when test="contains(@class, 'pagenum')">
-        <pb n="{@id}"/>
-      </xsl:when>
       <!-- span class="i3 smcap" -->
       <xsl:when test="contains(@class, 'smcap') and ancestor::*[@class='quote']">
         <author>
           <xsl:apply-templates/>
         </author>
+      </xsl:when>
+      <xsl:when test="contains(@class, 'pagenum')">
+        <pb n="{@id}"/>
+      </xsl:when>
+      <xsl:when test="$mapping">
+        <xsl:call-template name="mapping">
+          <xsl:with-param name="mapping" select="$mapping"/>
+        </xsl:call-template>
       </xsl:when>
       <xsl:when test=". = ''">
         <xsl:apply-templates/>
@@ -351,12 +294,6 @@ PHRASES
           <xsl:apply-templates select="@*"/>
           <xsl:apply-templates/>
         </foreign>
-      </xsl:when>
-      <!-- Roman number ? -->
-      <xsl:when test="@class='romain'">
-        <num>
-          <xsl:apply-templates/>
-        </num>
       </xsl:when>
       <xsl:when test="@class='smaller'">
         <xsl:apply-templates/>
@@ -386,15 +323,6 @@ PHRASES
       <xsl:otherwise>
         <seg>
           <xsl:apply-templates select="@*"/>
-          <xsl:attribute name="rend">
-            <xsl:choose>
-              <xsl:when test="@class = 'smcap'">sc</xsl:when>
-              <xsl:when test="@class">
-                <xsl:value-of select="@class"/>
-              </xsl:when>
-              <xsl:when test="contains(@style, 'small-caps')">sc</xsl:when>
-            </xsl:choose>
-          </xsl:attribute>
           <xsl:apply-templates/>
         </seg>
       </xsl:otherwise>
@@ -453,54 +381,81 @@ PHRASES
       <xsl:apply-templates select="node()|@*"/>
     </cell>
   </xsl:template>
-  <!-- 
- ATTRIBUTES
-  -->
-  <xsl:template match="@*"/>
-  <xsl:template match="@n | @rend | @xml:id | @xml:lang">
-    <xsl:copy>
-      <xsl:value-of select="."/>
-    </xsl:copy>
-  </xsl:template>
-  <xsl:template match="@lang">
-    <xsl:attribute name="xml:lang">
-      <xsl:value-of select="."/>
-    </xsl:attribute>
-  </xsl:template>
-  <xsl:template match="@id | @name">
-    <xsl:attribute name="xml:id">
-      <xsl:value-of select="."/>
-    </xsl:attribute>
-  </xsl:template>
-  <xsl:template match="@class">
-    <xsl:choose>
-      <xsl:when test="starts-with(., 'msonormal')"/>
-      <xsl:otherwise>
-        <xsl:attribute name="rend">
-          <xsl:value-of select="."/>
-        </xsl:attribute>
-      </xsl:otherwise>
-    </xsl:choose>
-  </xsl:template>
-  <xsl:template match="@title">
-    <xsl:attribute name="n">
-      <xsl:value-of select="."/>
-    </xsl:attribute>
-  </xsl:template>
+  
   <!-- Gutenberg notices -->
   <xsl:template match="html:pre">
     <xsl:choose>
       <xsl:when test="contains(., 'Gutenberg')"/>
       <xsl:otherwise>
-        <xsl:copy>
+        <eg>
           <xsl:apply-templates select="node() | @*"/>
-        </xsl:copy>
+        </eg>
       </xsl:otherwise>
     </xsl:choose>
   </xsl:template>
-  <!-- Guntenberg page number  -->
-  <xsl:template match="html:span[@class='pagenum']">
-    <pb n="{normalize-space(translate(., '()[]p.', ''))}"/>
+  
+  
+  <!-- Maping logic -->
+  <xsl:template name="mapping">
+    <xsl:param name="mapping"/>
+    <xsl:choose>
+      <!-- error ? -->
+      <xsl:when test="not($mapping)"/>
+      <xsl:when test="not($mapping/@tei)"/>
+      <!-- Filter element by class -->
+      <xsl:when test="$mapping/@tei = ''">
+        <xsl:apply-templates/>
+      </xsl:when>
+      <xsl:otherwise>
+        <xsl:element name="{$mapping/@tei}">
+          <xsl:apply-templates select="@*[name() != 'class']"/>
+          <xsl:if test="$mapping/@rend">
+            <xsl:attribute name="rend">
+              <xsl:value-of select="$mapping/@tei"/>
+            </xsl:attribute>
+          </xsl:if>
+          <xsl:if test="$mapping/@type">
+            <xsl:attribute name="type">
+              <xsl:value-of select="$mapping/@type"/>
+            </xsl:attribute>
+          </xsl:if>
+          <xsl:apply-templates/>
+        </xsl:element>
+      </xsl:otherwise>
+    </xsl:choose>
+  </xsl:template>
+  
+  
+  <!-- 
+ ATTRIBUTES
+  -->
+  <xsl:template match="html:*/@*" priority="0"/>
+  <xsl:template match="@n | @rend | @xml:lang">
+    <xsl:copy>
+      <xsl:value-of select="."/>
+    </xsl:copy>
+  </xsl:template>
+  <xsl:template match="@class">
+    <xsl:attribute name="rend">
+      <xsl:value-of select="translate(., $ÂBC, $abc)"/>
+    </xsl:attribute>
+  </xsl:template>
+  
+  <xsl:template match="@lang">
+    <xsl:attribute name="xml:lang">
+      <xsl:value-of select="."/>
+    </xsl:attribute>
+  </xsl:template>
+  <xsl:template match="@name">
+    <xsl:attribute name="xml:id">
+      <xsl:value-of select="."/>
+    </xsl:attribute>
+  </xsl:template>
+
+  <xsl:template match="@title">
+    <xsl:attribute name="n">
+      <xsl:value-of select="."/>
+    </xsl:attribute>
   </xsl:template>
     <!-- A counting template to produce inlines -->
   <xsl:template name="divClose">
@@ -511,7 +466,7 @@ PHRASES
         <xsl:call-template name="divClose">
           <xsl:with-param name="n" select="$n - 1"/>
         </xsl:call-template>
-      </xsl:when>     
+      </xsl:when>
     </xsl:choose>
   </xsl:template>
   <xsl:template name="divOpen">

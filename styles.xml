@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 
+LGPL  http://www.gnu.org/licenses/lgpl.html
+© 2017 frederic.glorieux@fictif.org 
+Feuille de style pour équivalence entre HTML et TEI
+
+<class> : a mapping between a CSS class name and a TEI element name
+<id> : a mapping between an id name and a TEI element name
+@name  : normalized name ([a-z]+), no spaces, no numbers, no punctuation, no diacritics
+@tei  : optional name of output TEI element
+  — if @tei is absent, all html with this name are stripped
+  - if @tei="" no TEI element will be created but content is parsed
+  — if @tei="name", TEI element <name> to create
+@html : optional element name, <p name="date"/> ≠ <span name="date"/>
+@type : optional, value for a type attribute
+@rend : optional, value for a rend attribute
+-->
+<!DOCTYPE sheet [
+  <!ELEMENT sheet (class|id)+>
+  <!ELEMENT class EMPTY>
+  <!ELEMENT id EMPTY>
+  <!ATTLIST class
+    html CDATA #IMPLIED
+    name CDATA #REQUIRED
+    tei CDATA #IMPLIED
+    type CDATA #IMPLIED
+    rend CDATA #IMPLIED
+   >
+  <!ATTLIST id
+    html CDATA #IMPLIED
+    name CDATA #REQUIRED
+    tei CDATA #IMPLIED
+    type CDATA #IMPLIED
+    rend CDATA #IMPLIED
+   >
+]>
+<sheet>
+  <id name="footer" html="div"/>
+  <id name="index" html="div"/>
+  <id name="jumptonav"/>
+  <id name="mwcontenttext" tei=""/>
+  <id name="sitenotice"/>
+  <class name="abbr" tei="abbr"/>
+  <class name="accentuation" tei="emph"/>
+  <class name="acteur" tei="speaker"/>
+  <class name="affiliation" tei="affiliation"/>
+  <class name="age" tei="age"/>
+  <class name="annee" html="span" tei="date"/>
+  <class name="annee" tei="dateline"/>
+  <class name="auteur" tei="byline"/>
+  <class name="author" tei="byline"/>
+  <class name="bibl" tei="bibl"/>
+  <class name="biblcar" tei="bibl"/>
+  <class name="biblio" tei="bibl"/>
+  <class name="bibliographie" tei="bibl"/>
+  <class name="bibliography" tei="bibl"/>
+  <class name="bulletsymbols" tei="glyph"/>
+  <class name="byline" tei="byline"/>
+  <class name="c-stage" tei="stage"/>
+  <!-- tidy generate class c1, c2…
+  <class name="c" tei="c"/>
+  -->
+  <class name="camera" tei="camera"/>
+  <class name="caption" tei="caption"/>
+  <class name="chp" html="div" tei="p"/>
+  <class name="citation" tei="quote"/>
+  <class name="citation1" tei="quote"/>
+  <class name="citation2" tei="quote"/>
+  <class name="citationalinea" tei="quote"/>
+  <class name="citationenvers" tei="l"/>
+  <class name="closer" tei="closer"/>
+  <class name="code" tei="code"/>
+  <class name="corpsdetexte" tei="p"/>
+  <class name="corr" tei="corr"/>
+  <class name="creator" tei="byline"/>
+  <class name="date" html="span" tei="date"/>
+  <class name="date" tei="dateline"/>
+  <class name="dateline" tei="dateline"/>
+  <class name="dd" tei="item"/>
+  <class name="definition" tei="gloss"/>
+  <class name="desc" tei="desc"/>
+  <class name="distinct" tei="distinct"/>
+  <class name="docauthor" tei="docAuthor"/>
+  <class name="docdate" tei="docDate"/>
+  <class name="docimprint" tei="docImprint"/>
+  <class name="dt" tei="label"/>
+  <class name="email" tei="email"/>
+  <class name="emphasis" tei="emph"/>
+  <class name="endnote" tei="note"/>
+  <class name="entry" tei="entry"/>
+  <class name="epigraph" tei="epigraph"/>
+  <class name="exemple" tei="quote"/>
+  <class name="footnote" tei="note"/>
+  <class name="head" tei="head"/>
+  <class name="header" tei="head"/>
+  <class name="heading" tei="head"/>
+  <class name="italic" html="span" tei="emph"/>
+  <class name="lg" tei="lg"/>
+  <class name="lieu" tei="placeName"/>
+  <class name="line" tei="l"/>
+  <class name="linenumbering" tei="num"/>
+  <class name="listcontent" tei="item"/>
+  <class name="listcontents" tei="item"/>
+  <class name="listheading" tei="label"/>
+  <class name="mwcitebacklink"/>
+  <class name="mwheadline" tei=""/>
+  <class name="name" tei="name"/>
+  <class name="normal" html="p" tei="p"/>
+  <class name="note" tei="note"/>
+  <class name="num" tei="num"/>
+  <class name="opener" tei="opener"/>
+  <class name="p" tei="p"/>
+  <class name="pagenum" tei="pb"/>
+  <class name="pagenum1" tei="pb"/>
+  <class name="pagenumber" tei="num"/>
+  <class name="pagination" tei="pb"/>
+  <class name="pb" tei="pb"/>
+  <class name="pchapitre" tei="head"/>
+  <class name="persname" tei="persName"/>
+  <class name="poem" tei="div" type="poem"/>
+  <class name="poetry" tei="div" type="poem"/>
+  <class name="postscript" tei="postscript"/>
+  <class name="ptexte" tei="p"/>
+  <class name="ptextecourant" tei="p"/>
+  <class name="quotations" tei="quote"/>
+  <class name="quote" tei="quote"/>
+  <class name="referencetext" tei=""/>
+  <class name="resume" tei="argument"/>
+  <class name="salutation" tei="salute"/>
+  <class name="salute" tei="salute"/>
+  <class name="sender" tei="byline"/>
+  <class name="signature" tei="signed"/>
+  <class name="signed" tei="signed"/>
+  <class name="smaller" tei=""/>
+  <class name="smcap" tei="hi" rend="sc"/>
+  <class name="smcap1" tei="hi" rend="sc"/>
+  <class name="stanza" tei="lg"/>
+  <class name="vers" tei="l"/>
+  <class name="versrompu" tei="l" type="part"/>
+</sheet>

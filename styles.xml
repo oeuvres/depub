@@ -12,8 +12,8 @@ Feuille de style pour équivalence entre HTML et TEI
   - if @tei="" no TEI element will be created but content is parsed
   — if @tei="name", TEI element <name> to create
 @html : optional element name, <p name="date"/> ≠ <span name="date"/>
-@type : optional, value for a type attribute
-@rend : optional, value for a rend attribute
+@type : optional, value for a tei:el/@type attribute
+@rend : optional, value for a tei:el/@rend attribute
 -->
 <!DOCTYPE sheet [
   <!ELEMENT sheet (class|id)+>

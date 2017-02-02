@@ -81,7 +81,7 @@ class Depub
       $this->log( E_USER_ERROR, $this->_basename.', pas de lien au fichier opf' );
       return;
     }
-    if ( ($cont = $this->_zip->getFromName( $matches[1]) ) === FALSE ) {
+    if ( ($cont = $this->_zip->getFromName( urldecode( $matches[1] ) ) ) === FALSE ) {
       $this->log( E_USER_ERROR, $this->_basename.'#'.$matches[1].' introuvable (container opf)' );
       return;
     }
@@ -112,7 +112,7 @@ class Depub
     if ($nl->length) {
       $tochref = $nl->item(0)->getAttribute("href");
       if ( $tochref[0] != "/") $tochref = $opfdir.$tochref;
-      if ( ($cont = $this->_zip->getFromName( $tochref ) ) === FALSE ) {
+      if ( ($cont = $this->_zip->getFromName( urldecode( $tochref ) ) ) === FALSE ) {
         $this->log( E_USER_ERROR, $this->_basename.'#'.$tochref.' introuvable (toc ncx)' );
         return;
       }
@@ -142,7 +142,6 @@ class Depub
    */
   public function tei()
   {
-
     $html =  implode( "\n", $this->_html );
     $xsl = new DOMDocument();
     $xsl->load( dirname(__FILE__)."/html2tei.xsl" );
@@ -209,7 +208,7 @@ class Depub
     // sauf dans le cas où il y a des fichiers dans le <spine> (ordre de navigation)
     // qui ne sont pas dans la toc
     // TODO ? lire le spine
-    if ( ( $html = $this->_zip->getFromName( $this->_tocdir.$fromfile ) ) === FALSE ) {
+    if ( ( $html = $this->_zip->getFromName( $this->_tocdir.urldecode( $fromfile ) ) ) === FALSE ) {
       $msg = "  — WARNING ".$this->_tocdir.$fromfile." fichier indiqué mais introuvable";
       $this->log( E_USER_WARNING, $msg );
       return "<!-- $msg -->";
@@ -307,7 +306,6 @@ class Depub
    * Build a search/replace regexp table from a sed script
    */
   public static function sed2preg( $file ) {
-
     $search=array();
     $replace=array();
     $handle = fopen( $file, "r");

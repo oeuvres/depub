@@ -21,8 +21,12 @@ class Depub
   private $_html;
   /** keep memory of where to insert html content */
   private $_lastpoint;
-  /** TODO, vérifier que la toc passe à travers tous les fichiers html */
-  private $_tocfiles = array();
+  /** table des identifiants de manifest */
+  private $_manifest = array();
+  /** vérifier que la toc passe à travers tous les fichiers html */
+  private $_spine = array();
+  /** Files inserted count */
+  private $_chops = 0;
   /** Log level for web, do not output  */
   public $loglevel = E_ALL;
   /** A logger, maybe a stream or a callable, used by $this->log() */
@@ -54,7 +58,7 @@ class Depub
    * On va dans le labyrinthe du zip pour trouver la toc
    * — attraper META-INF/container.xml
    * — dans container.xml, trouver le chemin vers content.opf
-   * — dans content.opf chercher le lien vers
+   * — dans content.opf chercher le lien vers toc.ncx
    */
   public function __construct( $epubfile, $logger="php://output" )
   {
@@ -67,22 +71,22 @@ class Depub
     if ( ($err=$this->_zip->open( $epubfile )) !== TRUE ) {
       // http://php.net/manual/fr/ziparchive.open.php
       if ( $err == ZipArchive::ER_NOZIP ) {
-        $this->log( E_USER_ERROR, $this->_basename." n’est pas un zip" );
+        $this->log( E_USER_ERROR, $this->_basename." is not a zip file" );
         return;
       }
-      $this->log( E_USER_ERROR, $this->_basename." impossible à ouvrir" );
+      $this->log( E_USER_ERROR, $this->_basename." impossible ton open" );
       return;
     }
     if ( ($cont = $this->_zip->getFromName('META-INF/container.xml')) === FALSE ) {
-      $this->log( E_USER_ERROR, $this->_basename.', container.xml introuvable' );
+      $this->log( E_USER_ERROR, $this->_basename.', container.xml not found' );
       return;
     }
     if ( !preg_match( '@full-path="([^"]+)"@', $cont, $matches ) ) {
-      $this->log( E_USER_ERROR, $this->_basename.', pas de lien au fichier opf' );
+      $this->log( E_USER_ERROR, $this->_basename.', no link to an opf file' );
       return;
     }
     if ( ($cont = $this->_zip->getFromName( urldecode( $matches[1] ) ) ) === FALSE ) {
-      $this->log( E_USER_ERROR, $this->_basename.'#'.$matches[1].' introuvable (container opf)' );
+      $this->log( E_USER_ERROR, $this->_basename.'#'.$matches[1].' opf container not found' );
       return;
     }
     $opfdir = dirname( $matches[1] );
@@ -96,24 +100,59 @@ class Depub
     $this->_html = array();
     $this->_html[] = '<?xml version="1.0" encoding="utf-8"?>';
     $this->_html[] = '<!DOCTYPE html>';
-    $this->_html[] = '<html xmlns="http://www.w3.org/1999/xhtml">';
-    $this->_html[] = "  <head>";
+    $this->_html[] = '<html xmlns="http://www.w3.org/1999/xhtml"
+  xmlns:dc="http://purl.org/dc/elements/1.1/"
+  xmlns:dcterms="http://purl.org/dc/terms/"
+  xmlns:opf="http://www.idpf.org/2007/opf"
+>'; // dc:, dcterms:, opf: maybe not set in <metadata>
+    $this->_html[] = '  <head>';
     $this->_html[] = '  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />';
     // $this->meta( $opf ); // ou bien xpath ?
     $metadata = $opf->getElementsByTagName('metadata')->item(0);
     $this->_html[] = $opf->saveXML( $metadata );
-    $this->_html[] = "  </head>";
-    $this->_html[] = "  <body>";
-
+    $this->_html[] = '  </head>';
+    $this->_html[] = '  <body>';
+    // get path by id in manifest
+    $nl = $opf->getElementsByTagName('manifest');
+    if ( !$nl ) {
+      $this->log( E_USER_ERROR, $this->_basename.'#content.opf <manifest> not found' );
+    }
+    else {
+      foreach ( $nl->item(0)->childNodes as $node ) {
+        if ( $node->nodeType != XML_ELEMENT_NODE ) continue;
+        // test media-type ?
+        $id = $node->getAttribute("id");
+        $href = $node->getAttribute("href");
+        $this->_manifest[$id] = $href;
+      }
+    }
+    // keep the flow of <spine>
+    $nl = $opf->getElementsByTagName('spine');
+    if ( !$nl ) {
+      $this->log( E_USER_ERROR, $this->_basename.'#content.opf <spine> not found' );
+    }
+    else {
+      foreach ( $nl->item(0)->childNodes as $node ) {
+        if ( $node->nodeType != XML_ELEMENT_NODE ) continue;
+        $idref = $node->getAttribute("idref");
+        if ( !isset( $this->_manifest[ $idref ] ) ) {
+          $this->log( E_USER_ERROR, $this->_basename.'#content.opf <spine>, idref="'.$idref.'" not found' );
+          continue;
+        }
+        // if content.opf is not in same folder as toc.ncx, possible problems
+        $path = $this->_manifest[ $idref ];
+        $this->_spine[ basename( $path ) ] = $path;
+      }
+    }
     // aller chercher une toc
-    // attantion, 2 formats possibles, *.ncx, ou bien xhtml
+    // attention, 2 formats possibles, *.ncx, ou bien xhtml
     // <item href="toc.ncx" id="ncx" media-type="application/x-dtbncx+xml"/>
     $nl = $xpath->query("//opf:item[@media-type='application/x-dtbncx+xml']");
-    if ($nl->length) {
+    if ( $nl->length ) {
       $tochref = $nl->item(0)->getAttribute("href");
       if ( $tochref[0] != "/") $tochref = $opfdir.$tochref;
       if ( ($cont = $this->_zip->getFromName( urldecode( $tochref ) ) ) === FALSE ) {
-        $this->log( E_USER_ERROR, $this->_basename.'#'.$tochref.' introuvable (toc ncx)' );
+        $this->log( E_USER_ERROR, $this->_basename.'#'.$tochref.' (toc ncx) not found' );
         return;
       }
       $this->_tocdir = dirname( $tochref );
@@ -121,9 +160,17 @@ class Depub
       else $this->_tocdir.="/";
       $toc = self::dom( $cont );
       $this->ncxrecurs( $toc->getElementsByTagName("navMap") );
-
+      // no items found in toc, insert all spine
+      if ( !$this->_chops ) {
+        foreach ( $this->_spine as $href ) {
+          $this->_html[] = $this->chop( $href, null );
+        }
+        $msg = "  — WARNING ".$this->_basename.' no entry found in toc, <spine> insertion';
+        $this->log( E_USER_WARNING, $msg );
+      }
     }
     else {
+      $this->log( E_USER_ERROR, $this->_basename.' no toc found' );
       // toc xhtml ?
     }
     $this->_html[] = "  </body>";
@@ -151,9 +198,9 @@ class Depub
   }
 
   /**
-   * Produire les info en
+   * Recursive parse of a nav point
    */
-  public function ncxrecurs( $nl, $margin="", $first=true )
+  public function ncxrecurs( $nl, $margin="", $root=true )
   {
     $indent="  ";
     if ( !$nl->length ) return;
@@ -161,6 +208,13 @@ class Depub
     foreach ($nl as $node ) {
       if ( $node->nodeType != XML_ELEMENT_NODE ) continue;
       $name = $node->tagName;
+      if ( $name == "navMap" ) {
+        $this->ncxrecurs( $node->childNodes, $margin.$indent, false );
+      }
+      else if ( $name == "navPoint" ) {
+        $this->ncxrecurs( $node->childNodes, $margin.$indent, false );
+      }
+      // open a section
       if ( $name == "navLabel" ) {
         $title = trim( $node->textContent );
         $title = preg_replace("/\s+/u", " ", $title);
@@ -168,26 +222,63 @@ class Depub
       }
       else if ( $name == "content" ) {
         $src = $node->getAttribute("src");
-        // @src is empty, trick to open a hierarchical section with no content
+        // @src is empty, trick found to open a hierarchical section with no content
         if ( !$src ) continue;
+        // keep memory of this href
         $this->_html[] = $src;
-        // on connait la fin du précédent chunk, on peut choper le bout de html
+        $lastpoint = count( $this->_html ) - 1;
+        // insert now from last href to current href
         if ( $this->_lastpoint ) {
-          $this->_html[ $this->_lastpoint ] = $this->chop( $this->_html[ $this->_lastpoint ], $src );
+          $lasthref = $this->_html[ $this->_lastpoint ];
+          $lastfile = basename( $lasthref );
+          if ( $pos = strpos($lastfile, '#') ) $lastfile = substr( $lastfile, 0, $pos);
+          $srcfile = basename( $src );
+          if ( $pos = strpos($srcfile, '#') ) $srcfile = substr( $srcfile, 0, $pos);
+          $cont = array(); // html content to compile
+          // if nextfile is different from lastfile, search in spine if there are files between the 2 toc entries
+          if ( $lastfile != $srcfile ) {
+            reset( $this->_spine );
+            // forward cursor in spine to the last file pointed
+            while( $entry = each( $this->_spine ) ) {
+              if ( $entry[0] == $lastfile ) break;
+            }
+            // search for interstitial files
+            while( $entry = each( $this->_spine ) ) {
+              if ( $entry[0] == $srcfile ) break;
+              // here we can have a problem in link resolution if content.opf and toc.ncx in different folder
+              $cont[] =  $this->chop( $lasthref, $entry[1] );
+              $lasthref = $entry[1];
+            }
+          }
+          // multiple sections may have been open here
+          $cont[] = $this->chop( $lasthref, $src );
+          $this->_html[ $this->_lastpoint ] = implode( $cont, "\n" );
         }
-        $this->_lastpoint = count( $this->_html )-1;
-      }
-      else if ( $name == "navMap" ) {
-        $this->ncxrecurs( $node->childNodes, $margin.$indent, false );
-      }
-      else if ( $name == "navPoint" ) {
-        $this->ncxrecurs( $node->childNodes, $margin.$indent, false );
+        $this->_lastpoint = $lastpoint;
       }
     }
-    // une section a été ouverte, la refermer
+    // a section has been opened in this call, close it
     if ($title) $this->_html[] = $margin.'</section>';
-    // finir le travail sur le dernier fichier
-    if ( $first ) $this->_html[ $this->_lastpoint ] = $this->chop( $this->_html[ $this->_lastpoint ], null );
+    // root call, lasthref has not been inserted
+    if ( $root )  {
+      // finish work on last link
+      $lasthref = $this->_html[ $this->_lastpoint ];
+      $cont = array();
+      $cont[] = $this->chop( $lasthref, null );
+      // check if it is end if spine
+      reset( $this->_spine );
+      // forward cursor in spine to the last file pointed
+      $lastfile = basename( $lasthref );
+      if ( $pos = strpos($lastfile, '#') ) $lastfile = substr( $lastfile, 0, $pos);
+      while( $entry = each( $this->_spine ) ) {
+        if ( $entry[0] == $lastfile ) break;
+      }
+      // insert last file
+      while( $entry = each( $this->_spine ) ) {
+        $cont[] =  $this->chop( $entry[1], null );
+      }
+      $this->_html[ $this->_lastpoint ] = implode( $cont, "\n" );
+    }
   }
   /**
    * Choper un bout de html dans le zip
@@ -209,7 +300,7 @@ class Depub
     // qui ne sont pas dans la toc
     // TODO ? lire le spine
     if ( ( $html = $this->_zip->getFromName( $this->_tocdir.urldecode( $fromfile ) ) ) === FALSE ) {
-      $msg = "  — WARNING ".$this->_tocdir.$fromfile." fichier indiqué mais introuvable";
+      $msg = "  — WARNING ".$this->_tocdir.$fromfile." file mentioned but not found";
       $this->log( E_USER_WARNING, $msg );
       return "<!-- $msg -->";
     }
@@ -221,11 +312,11 @@ class Depub
       $html
     )
     */
-
+    $this->_chops++;
     // chercher l’index de début dans le fichier HTML
     $startpos = 0;
     if ( !preg_match( '@<body[^>]*>@', $html, $matches, PREG_OFFSET_CAPTURE) ) {
-      $msg = "  — WARNING ".$this->_basename.'#'.$fromfile.' pas de balise <body>';
+      $msg = "  — WARNING ".$this->_basename.'#'.$fromfile.' no <body> tag';
       $this->log( E_USER_WARNING, $msg );
       $chop[] = "<!-- $msg -->";
     }
@@ -234,7 +325,7 @@ class Depub
       // take start of line
       // <h1 class="P_Heading_1"><span><a id="auto_bookmark_1"/>PROLOGUE</span></h1>
       if ( !preg_match( '@\n.*id="'.$fromanchor.'"@', $html, $matches, PREG_OFFSET_CAPTURE) ) {
-        $msg = "  — WARNING ".$this->_basename.'#'.$fromfile.' '.$fromanchor.' risque de texte répliqué, ancre indiquée dans la toc mais non trouvée';
+        $msg = "  — WARNING ".$this->_basename.'#'.$fromfile.' '.$fromanchor.' anchor not found, some text maybe replicated';
         $this->log( E_USER_WARNING, $msg );
         $chop[] = "<!-- $msg -->";
       }
@@ -248,12 +339,12 @@ class Depub
     if ( $fromfile == $tofile ) {
       // pas d’ancre de fin, risque de répliquer du texte
       if ( !$toanchor ) {
-        $msg = "  — WARNING ".$this->_basename.'#'.$fromfile.' risque de texte répliqué ';
+        $msg = "  — WARNING ".$this->_basename.'#'.$fromfile.' some text maybe replicated ';
         $this->log( E_USER_WARNING, $msg );
         $chop[] = "<!-- $msg -->";
       }
       else if ( !preg_match( '@<([^ >]+)[^>]*id="'.$toanchor.'"[^>]*>@', $html, $matches, PREG_OFFSET_CAPTURE) ) {
-        $msg = "  — WARNING ".$this->_basename.'#'.$fromfile.' risque de texte répliqué, '.$fromanchor.' ancre non trouvée';
+        $msg = "  — WARNING ".$this->_basename.'#'.$fromfile.' '.$fromanchor.' anchor not found, some text may be replicated';
         $this->log( E_USER_WARNING, $msg );
         $chop[] = "<!-- $msg -->";
       }
@@ -265,7 +356,7 @@ class Depub
     // entités HTML4 pourries
     $html = html_entity_decode($html, ENT_QUOTES | ENT_HTML5 | ENT_XML1, 'UTF-8');
     $html = preg_replace( self::$rehtml[0], self::$rehtml[1], $html );
-    $html = tidy_repair_string ( $html , self::$tidyconf);
+    $html = tidy_repair_string ( $html, self::$tidyconf);
 
     $chop[] = $html;
     return implode( $chop, "\n");

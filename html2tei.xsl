@@ -37,7 +37,7 @@ STRUCTURE
     <xsl:if test="function-available('date:date-time')">
       <xsl:value-of select="$lf"/>
       <xsl:comment>
-        <xsl:text>Odette: </xsl:text>
+        <xsl:text>Html2tei: </xsl:text>
         <xsl:value-of select="date:date-time()"/>
       </xsl:comment>
     </xsl:if>

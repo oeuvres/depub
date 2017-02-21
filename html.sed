@@ -7,4 +7,4 @@
 
 # delete all ids ?
 s@ id="[^"]*"@@g
-s@&([a-zA-Z]*\s)@&amp;$1@g # incorrect entities
+s@&([A-Za-z]*[^;])@&amp;$1@g # incorrect entities

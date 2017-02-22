@@ -217,13 +217,28 @@ class Depub
       // open a section
       if ( $name == "navLabel" ) {
         $title = trim( $node->textContent );
-        $title = preg_replace("/\s+/u", " ", $title);
+        $title = preg_replace(array("/\s+/u", '@&([A-Za-z]*[^;])@', '/"/u'), array(" ", '&amp;$1', "&quot;"), $title);
         $this->_html[] = $margin.'<section title="'.$title.'" class="toc">';
       }
       else if ( $name == "content" ) {
         $src = $node->getAttribute("src");
         // @src is empty, trick found to open a hierarchical section with no content
         if ( !$src ) continue;
+        $srcfile = basename( $src );
+        if ( $pos = strpos($srcfile, '#') ) $srcfile = substr( $srcfile, 0, $pos);
+        // first point in navigation, check if there are files before in the spine
+        if ( !$this->_lastpoint ) {
+          $cont = array(); // html content to compile
+          reset( $this->_spine );
+          while( $entry = each( $this->_spine ) ) {
+            if ( $entry[0] == $srcfile ) break;
+            $name = strtolower( pathinfo( $entry[0], PATHINFO_FILENAME) );
+            if ( $name == "titlepage" || $name == "cover" || $name == "colophon" || $name == "toc" ) continue;
+            // here we can have a problem in link resolution if content.opf and toc.ncx in different folder
+            $cont[] =  $this->chop( $entry[1], null );
+          }
+          if ( count( $cont ) ) $this->_html[] = implode( $cont, "\n" );
+        }
         // keep memory of this href
         $this->_html[] = $src;
         $lastpoint = count( $this->_html ) - 1;
@@ -232,8 +247,6 @@ class Depub
           $lasthref = $this->_html[ $this->_lastpoint ];
           $lastfile = basename( $lasthref );
           if ( $pos = strpos($lastfile, '#') ) $lastfile = substr( $lastfile, 0, $pos);
-          $srcfile = basename( $src );
-          if ( $pos = strpos($srcfile, '#') ) $srcfile = substr( $srcfile, 0, $pos);
           $cont = array(); // html content to compile
           // if nextfile is different from lastfile, search in spine if there are files between the 2 toc entries
           if ( $lastfile != $srcfile ) {

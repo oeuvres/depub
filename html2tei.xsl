@@ -27,6 +27,9 @@
       <xsl:apply-templates select="node() | @*"/>
     </xsl:copy>
   </xsl:template>
+  <xsl:template match="@*">
+    <xsl:copy/>
+  </xsl:template>
   <xsl:template match="html:link | html:script | html:style"/>
   <xsl:template match="html:meta[@http-equiv]"/>
 <!--
@@ -479,5 +482,17 @@ PHRASES
         </xsl:call-template>
       </xsl:when>
     </xsl:choose>
+  </xsl:template>
+  <xsl:template name="debug">
+    <xsl:for-each select="ancestor-or-self::*">
+      <xsl:text>/</xsl:text>
+      <xsl:variable name="name" select="name()"/>
+      <xsl:value-of select="$name"/>
+      <xsl:if test="count(../*[name()=$name]) &gt; 1">
+        <xsl:text>[</xsl:text>
+          <xsl:number/>
+        <xsl:text>]</xsl:text>
+      </xsl:if>
+    </xsl:for-each>
   </xsl:template>
 </xsl:transform>

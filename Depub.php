@@ -216,9 +216,15 @@ class Depub
       }
       // open a section
       if ( $name == "navLabel" ) {
-        $title = trim( $node->textContent );
-        $title = preg_replace(array("/\s+/u", '@&([A-Za-z]*[^;])@', '/"/u'), array(" ", '&amp;$1', "&quot;"), $title);
-        $this->_html[] = $margin.'<section title="'.$title.'" class="toc">';
+        $title = substr( trim( $node->textContent ), 0, 1000);
+        if ( $title ) {
+          $title = preg_replace(array("/\s+/u", '@&([A-Za-z]*[^;])@', '/"/u'), array(" ", '&amp;$1', "&quot;"), $title);
+          $this->_html[] = $margin.'<section title="'.$title.'" class="toc">';
+        }
+        else {
+          $this->_html[] = $margin.'<section class="toc">';
+          $title = true;
+        }
       }
       else if ( $name == "content" ) {
         $src = $node->getAttribute("src");

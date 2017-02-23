@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <xsl:transform xmlns:xsl="http://www.w3.org/1999/XSL/Transform" version="1.0"
   xmlns="http://www.tei-c.org/ns/1.0" 
+  xmlns:epub="http://www.idpf.org/2007/ops"
+  
   xmlns:html="http://www.w3.org/1999/xhtml"
   exclude-result-prefixes="html"
-
   xmlns:exslt="http://exslt.org/common"
   xmlns:date="http://exslt.org/dates-and-times"
   xmlns:php="http://php.net/xsl"

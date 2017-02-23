@@ -103,6 +103,7 @@ class Depub
     $this->_html[] = '<html xmlns="http://www.w3.org/1999/xhtml"
   xmlns:dc="http://purl.org/dc/elements/1.1/"
   xmlns:dcterms="http://purl.org/dc/terms/"
+  xmlns:epub="http://www.idpf.org/2007/ops"
   xmlns:opf="http://www.idpf.org/2007/opf"
 >'; // dc:, dcterms:, opf: maybe not set in <metadata>
     $this->_html[] = '  <head>';

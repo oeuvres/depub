@@ -35,20 +35,23 @@ class Depub
   private static $_init;
   /** To wash html */
   public static $rehtml;
-  /** Config for tidy html, used for inserted fragments */
+  /** Config for tidy html, used for inserted fragments: http://tidy.sourceforge.net/docs/quickref.html */
   public static $tidyconf = array(
-    'clean' => true,
+    // will strip all unknown tags like <svg> or <section>
+    'clean' => true, // MSO mess
     'doctype' => "omit",
-    'force-output' => true,
-    // 'indent' => true, // fait pas xsl
+    // 'force-output' => true, // let tidy complain
+    // 'indent' => true, // xsl done
     'input-encoding' => "utf8", // ?? OK ?
     'newline' => "LF",
+    'numeric-entities' => true,
     // 'new-blocklevel-tags' => 'section',
-    // 'numeric-entities' => false,
-    'output-encoding' => "utf8",
-    'output-xhtml' => true, // will strip unknown html5 tags, use new-blocklevel-tags
-    // 'output-xml' => true,
-    'quote-nbsp' => false,
+    // 'char-encoding' => "utf8",
+    'output-encoding' => "utf8", // ?? OK ?
+    'output-xhtml' => true,
+    // 'output-xml' => true, // show-body-only will bug with <svg> => <html>
+    // 'preserve-entities' => false, // unknown
+    // 'quote-nbsp' => false,
     'wrap' => false,
     'show-body-only' => true,
   );
@@ -107,6 +110,7 @@ class Depub
   xmlns:opf="http://www.idpf.org/2007/opf"
 >'; // dc:, dcterms:, opf: maybe not set in <metadata>
     $this->_html[] = '  <head>';
+    // for libxml
     $this->_html[] = '  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />';
     // $this->meta( $opf ); // ou bien xpath ?
     $metadata = $opf->getElementsByTagName('metadata')->item(0);
@@ -164,6 +168,7 @@ class Depub
       // no items found in toc, insert all spine
       if ( !$this->_chops ) {
         foreach ( $this->_spine as $href ) {
+          $this->_html[] = "<!-- WARNING $href not in toc, from <spine> -->";
           $this->_html[] = $this->chop( $href, null );
         }
         $msg = "  — WARNING ".$this->_basename.' no entry found in toc, <spine> insertion';
@@ -195,7 +200,25 @@ class Depub
     $xsl->load( dirname(__FILE__)."/html2tei.xsl" );
     $trans = new XSLTProcessor();
     $trans->importStyleSheet( $xsl );
-    return $trans->transformToXML( self::dom($html) );
+
+    $dom = new DOMDocument();
+    $dom->preserveWhiteSpace = false;
+    // $dom->formatOutput=true;
+    $dom->substituteEntities=true;
+    $dom->encoding = "UTF-8";
+    $dom->recover = true;
+    libxml_clear_errors();
+    // libxml_use_internal_errors(true);
+    // recover could break section structure
+    // $dom->loadHTML( $html, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD | LIBXML_NOBLANKS | LIBXML_NOENT | LIBXML_NONET | LIBXML_NOWARNING | LIBXML_NOXMLDECL );
+    // LIBXML_NOERROR  | LIBXML_NSCLEAN  | LIBXML_NOCDATA
+    $dom->loadXML($html, LIBXML_NOBLANKS | LIBXML_NOENT | LIBXML_NONET );
+    $dom->encoding = "UTF-8";
+    $errors = libxml_get_errors();
+    // faut-il faire quelque chose des erreurs ici ?
+    libxml_clear_errors();
+    $dom->preserveWhiteSpace = false;
+    return $trans->transformToXML( $dom );
   }
 
   /**
@@ -242,6 +265,7 @@ class Depub
             $name = strtolower( pathinfo( $entry[0], PATHINFO_FILENAME) );
             if ( $name == "titlepage" || $name == "cover" || $name == "colophon" || $name == "toc" ) continue;
             // here we can have a problem in link resolution if content.opf and toc.ncx in different folder
+            $cont[] = "<!-- WARNING ".$entry[1]." not in toc, inserted from <spine> -->";
             $cont[] =  $this->chop( $entry[1], null );
           }
           if ( count( $cont ) ) $this->_html[] = implode( $cont, "\n" );
@@ -265,6 +289,7 @@ class Depub
             // search for interstitial files
             while( $entry = each( $this->_spine ) ) {
               if ( $entry[0] == $srcfile ) break;
+              $cont[] = "<!-- WARNING ".$entry[1]." not in toc, inserted from <spine> -->";
               // here we can have a problem in link resolution if content.opf and toc.ncx in different folder
               $cont[] =  $this->chop( $lasthref, $entry[1] );
               $lasthref = $entry[1];
@@ -295,6 +320,7 @@ class Depub
       }
       // insert last file
       while( $entry = each( $this->_spine ) ) {
+        $cont[] = "<!-- WARNING ".$entry[1]." not in toc, inserted from <spine> -->";
         $cont[] =  $this->chop( $entry[1], null );
       }
       $this->_html[ $this->_lastpoint ] = implode( $cont, "\n" );
@@ -306,7 +332,8 @@ class Depub
   public function chop( $from, $to )
   {
     $chop = array(); // html à retourner
-    $chop[] = "<!-- ".$from." -> ".$to." -->";
+    if ( $to ) $chop[] = "<!-- ".$from." -> ".$to." -->";
+    else $chop[] = "<!-- ".$from." -->";
     $fromfile = $from;
     $fromanchor = "";
     if ( $pos = strpos($from, '#') )
@@ -324,14 +351,12 @@ class Depub
       $this->log( E_USER_WARNING, $msg );
       return "<!-- $msg -->";
     }
-    // indent blocks with possible ids ?
-    /*
+    // indent some blocks
     $html = preg_replace(
-      array(),
-      array(),
+      array( '@(</(div|h1|h2|h3|h4|h5|h6|p)>)([^\n])@', '@(<body)@'),
+      array( "$1\n$3", "\n$1" ),
       $html
-    )
-    */
+    );
     $this->_chops++;
     // chercher l’index de début dans le fichier HTML
     $startpos = 0;
@@ -373,10 +398,15 @@ class Depub
       }
     }
     $html = substr( $html, $startpos, $endpos - $startpos );
-    // entités HTML4 pourries
-    $html = html_entity_decode($html, ENT_QUOTES | ENT_HTML5 | ENT_XML1, 'UTF-8');
-    $html = preg_replace( self::$rehtml[0], self::$rehtml[1], $html );
-    $html = tidy_repair_string ( $html, self::$tidyconf);
+    // NO ! &
+    // preserve some critic XML entities before transcoding
+    $html = preg_replace( "@&(amp|lt|gt);@", "£$1;", $html );
+    $html = html_entity_decode( $html, ENT_QUOTES | ENT_HTML5 , 'UTF-8' );
+    $html = preg_replace( "@£(amp|lt|gt);@", "&$1;", $html );
+    // restore some entities before transcoding
+    // $html = preg_replace( self::$rehtml[0], self::$rehtml[1], $html );
+    // html usually need to be repaired, because of bad html fragments
+    $html = tidy_repair_string ( $html, self::$tidyconf );
 
     $chop[] = $html;
     return implode( $chop, "\n");

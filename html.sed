@@ -6,5 +6,6 @@
 # frederic.glorieux@fictif.org
 
 # delete all ids ?
-s@ id="[^"]*"@@g
-s@&([A-Za-z]*[^;])@&amp;$1@g # incorrect entities
+s@ name="[^"]*"@@g
+# s@&([A-Za-z]*[^;])@&amp;$1@g # incorrect entities
+s@&nbsp;@ @g

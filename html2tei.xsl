@@ -4,7 +4,7 @@
   xmlns:epub="http://www.idpf.org/2007/ops"
   
   xmlns:html="http://www.w3.org/1999/xhtml"
-  exclude-result-prefixes="html"
+  exclude-result-prefixes="html epub"
   xmlns:exslt="http://exslt.org/common"
   xmlns:date="http://exslt.org/dates-and-times"
   xmlns:php="http://php.net/xsl"
@@ -96,6 +96,18 @@ STRUCTURE
       </xsl:when>
       <xsl:when test="$mixed = '' and count(*) = 1 and *[@class='pagenum']">
         <xsl:apply-templates/>
+      </xsl:when>
+      <xsl:when test="$class = 'strophe' or $class = 'strophec' or $class = 'lg' or $class = 'stanza'">
+        <lg>
+          <xsl:apply-templates select="@*[name() != 'class']"/>
+          <xsl:apply-templates/>
+        </lg>
+      </xsl:when>
+      <xsl:when test="$class = 'quote' or $class = 'quotec' ">
+        <quote>
+          <xsl:apply-templates select="@*"/>
+          <xsl:apply-templates/>
+        </quote>
       </xsl:when>
       <xsl:otherwise>
         <div>
@@ -197,12 +209,22 @@ BLOCKS
           <xsl:with-param name="mapping" select="$mapping"/>
         </xsl:call-template>
       </xsl:when>
-      <xsl:when test="ancestor::html:div[@class='poetry' or @class='stanza' or @class='poem'] ">
+      <xsl:when test="ancestor::html:div[@class='poetry' or @class='stanza' or @class='poem' or @class='strophe' or @class='strophec'] ">
         <l>
           <xsl:apply-templates select="node()|@*"/>
         </l>
       </xsl:when>
-      <xsl:when test=" @class = 'titre' ">
+      <xsl:when test=" $class = 'hsub' or $class = 'hsubc'">
+        <head type="sub">
+          <xsl:apply-templates select="@*[name() != 'class'] | node()"/>
+        </head>
+      </xsl:when>
+      <xsl:when test=" $class = 'sig' or $class = 'signed' ">
+        <signed>
+          <xsl:apply-templates select="@* | node()"/>
+        </signed>
+      </xsl:when>
+      <xsl:when test=" $class = 'titre' ">
         <label>
           <xsl:apply-templates select="@* | node()"/>
         </label>
@@ -299,8 +321,10 @@ PHRASES
           <xsl:apply-templates/>
         </foreign>
       </xsl:when>
-      <xsl:when test="@class='smaller'">
-        <xsl:apply-templates/>
+      <xsl:when test="$class='sc'">
+        <hi rend="sc">
+          <xsl:apply-templates/>
+        </hi>
       </xsl:when>
       <xsl:when test="@class='add2em'">
         <seg type="tab">    </seg>

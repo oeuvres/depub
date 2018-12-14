@@ -95,6 +95,7 @@ Feuille de style pour équivalence entre HTML et TEI
   <class name="header" tei="head"/>
   <class name="heading" tei="head"/>
   <class name="italic" html="span" tei="emph"/>
+  <class name="italiquecar" html="span" tei="emph"/>
   <class name="lg" tei="lg"/>
   <class name="lieu" tei="placeName"/>
   <class name="line" tei="l"/>
@@ -106,6 +107,7 @@ Feuille de style pour équivalence entre HTML et TEI
   <class name="mwheadline" tei=""/>
   <class name="name" tei="name"/>
   <class name="normal" html="p" tei="p"/>
+  <class name="msonormal" html="p" tei="p"/>
   <class name="note" tei="note"/>
   <class name="num" tei="num"/>
   <class name="opener" tei="opener"/>

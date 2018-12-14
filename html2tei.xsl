@@ -12,7 +12,8 @@
   >
   <xsl:output indent="yes" encoding="UTF-8" method="xml" omit-xml-declaration="yes"/>
   <xsl:variable name="lf" select="'&#10;'"/>
-  <xsl:variable name="ÂBC">ABCDEFGHIJKLMNOPQRSTUVWXYZÀÂÄÆÇÉÈÊËÎÏÑÔÖŒÙÛÜ _-,1234567890</xsl:variable>
+  <!-- 1234567890 -->
+  <xsl:variable name="ÂBC">ABCDEFGHIJKLMNOPQRSTUVWXYZÀÂÄÆÇÉÈÊËÎÏÑÔÖŒÙÛÜ _-,</xsl:variable>
   <xsl:variable name="âbc">abcdefghijklmnopqrstuvwxyzàâäæçéèêëîïñôöœùûü</xsl:variable>
   <xsl:variable name="abc">abcdefghijklmnopqrstuvwxyzaaaeceeeeiinooeuuu</xsl:variable>
   <xsl:variable name="sheet" select="document('styles.xml', document(''))"/>
@@ -447,6 +448,7 @@ PHRASES
               <xsl:value-of select="$mapping/@type"/>
             </xsl:attribute>
           </xsl:if>
+          <xsl:apply-templates select="@*[name() != 'class']"/>
           <xsl:apply-templates/>
         </xsl:element>
       </xsl:otherwise>
@@ -458,11 +460,13 @@ PHRASES
  ATTRIBUTES
   -->
   <xsl:template match="html:*/@*" priority="0"/>
+  
   <xsl:template match="@n | @rend | @xml:lang">
     <xsl:copy>
       <xsl:value-of select="."/>
     </xsl:copy>
   </xsl:template>
+  
   <xsl:template match="@class">
     <xsl:attribute name="rend">
       <xsl:value-of select="translate(., $ÂBC, $abc)"/>
@@ -474,16 +478,26 @@ PHRASES
       <xsl:value-of select="."/>
     </xsl:attribute>
   </xsl:template>
+  
   <xsl:template match="@name">
     <xsl:attribute name="xml:id">
       <xsl:value-of select="."/>
     </xsl:attribute>
   </xsl:template>
 
-  <xsl:template match="@title">
-    <xsl:attribute name="n">
+  <xsl:template match="@id">
+    <xsl:attribute name="xml:id">
       <xsl:value-of select="."/>
     </xsl:attribute>
+  </xsl:template>
+  
+  <xsl:template match="@title">
+    <xsl:variable name="title" select="normalize-space(.)"/>
+    <xsl:if test="$title != ''">
+      <xsl:attribute name="n">
+        <xsl:value-of select="."/>
+      </xsl:attribute>
+    </xsl:if>
   </xsl:template>
     <!-- A counting template to produce inlines -->
   <xsl:template name="divClose">

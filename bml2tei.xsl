@@ -23,8 +23,8 @@
     </xsl:attribute>
   </xsl:template>
   <xsl:template match="bml:bml">
-    <xsl:text disable-output-escaping="yes"><![CDATA[<?xml-stylesheet type="text/xsl" href="../Teinte/tei2html.xsl"?>
-<?xml-model href="http://oeuvres.github.io/Teinte/teinte.rng" type="application/xml" schematypens="http://relaxng.org/ns/structure/1.0"?>
+    <xsl:text disable-output-escaping="yes"><![CDATA[<?xml-stylesheet type="text/xsl" href="../teinte/tei2html.xsl"?>
+<?xml-model href="http://oeuvres.github.io/teinte/teinte.rng" type="application/xml" schematypens="http://relaxng.org/ns/structure/1.0"?>
 ]]></xsl:text>
     <TEI xml:lang="fr">
       <teiHeader>
@@ -44,10 +44,18 @@
             </author>
           </titleStmt>
           <publicationStmt>
-            <publisher>GitHub</publisher>
+            <publisher>hurlus.fr</publisher>
           </publicationStmt>
           <sourceDesc>
             <bibl>
+              <xsl:for-each select="/bml:bml/bml:metadata/bml:volume/bml:facsimile[@href]">
+                <ref>
+                  <xsl:attribute name="target">
+                    <xsl:value-of select="@href"/>
+                  </xsl:attribute>
+                  <xsl:value-of select="@href"/>
+                </ref>
+              </xsl:for-each>
               <ref>
                 <xsl:attribute name="target">
                   <xsl:value-of select="/bml:bml/bml:metadata/bml:electronique/@identificateur"/>
@@ -124,10 +132,13 @@
       <xsl:apply-templates select="node()|@*"/>
     </div>
   </xsl:template>
-  <xsl:template match="bml:h1 | bml:h2">
+  <xsl:template match="bml:h1 | bml:h2  | bml:h3">
     <head>
       <xsl:apply-templates select="node()|@*"/>
     </head>
+  </xsl:template>
+  <xsl:template match="bml:h1/bml:b | bml:h2/bml:b  | bml:h3/bml:b | bml:h1/bml:s | bml:h2/bml:s  | bml:h3/bml:s ">
+    <xsl:apply-templates/>
   </xsl:template>
   <xsl:template match="bml:p/@class">
     <xsl:attribute name="rend">

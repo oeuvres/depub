@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <xsl:transform exclude-result-prefixes="bml" version="1.0" xmlns="http://www.tei-c.org/ns/1.0" xmlns:bml="http://efele.net/2010/ns/bml" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
-  <xsl:output encoding="UTF-8" indent="yes" media-type="text/html" method="xml"/>
+  <xsl:output encoding="UTF-8" indent="yes" method="xml"/>
   <xsl:key match="*[@id]" name="id" use="@id"/>
   <xsl:variable name="caps">ABCDEFGHIJKLMNOPQRSTUVWXYZÆŒÇÀÁÂÃÄÅÈÉÊËÌÍÎÏÒÓÔÕÖÙÚÛÜÝ</xsl:variable>
   <xsl:variable name="mins">abcdefghijklmnopqrstuvwxyzæœçàáâãäåèéêëìíîïòóôõöùúûüý</xsl:variable>
@@ -49,6 +49,7 @@
           <sourceDesc>
             <bibl>
               <xsl:for-each select="/bml:bml/bml:metadata/bml:volume/bml:facsimile[@href]">
+                <xsl:if test="position() != 1"><lb/></xsl:if>
                 <ref>
                   <xsl:attribute name="target">
                     <xsl:value-of select="@href"/>
@@ -56,6 +57,8 @@
                   <xsl:value-of select="@href"/>
                 </ref>
               </xsl:for-each>
+            </bibl>
+            <bibl>
               <ref>
                 <xsl:attribute name="target">
                   <xsl:value-of select="/bml:bml/bml:metadata/bml:electronique/@identificateur"/>
@@ -84,26 +87,63 @@
       </text>
     </TEI>
   </xsl:template>
-  <!-- <vsep xmlns="http://efele.net/2010/ns/bml" rend="threestars"/> -->
+  <!-- <vsep xmlns="http://efele.net/2010/ns/bml" rend="threestars"/>
+  
+       | "emptyline" 
+       | "fewlines"
+       
+       | "onestar" 
+       | "threestars" 
+       | "threestarsrow"
+       
+       | "dots" 
+       | "rule"
+       | "fullwidth-rule"
+       | "tilderule"
+       | "doublerule"
+  -->
   <xsl:template match="bml:vsep">
-    <ab type="ornament">
-      <xsl:choose>
-        <xsl:when test="@rend='threestars'">
-          <xsl:attribute name="rend">center</xsl:attribute>
-        </xsl:when>
-        <xsl:when test="@rend != ''">
-          <xsl:attribute name="rend">
-            <xsl:value-of select="@rend"/>
-          </xsl:attribute>
-        </xsl:when>
-        <xsl:otherwise>
-          <xsl:attribute name="rend">center</xsl:attribute>
-        </xsl:otherwise>
-      </xsl:choose>
-      <xsl:text>*</xsl:text>
-      <lb/>
-      <xsl:text>* *</xsl:text>
-    </ab>
+    <xsl:choose>
+      <xsl:when test="contains(@class, 'line')">
+        <lb>
+          <xsl:attribute name="type">line</xsl:attribute>
+          <xsl:if test="@class != 'line' and @class != 'emptyline'">
+            <xsl:attribute name="rend">
+              <xsl:value-of select="@class"/>
+            </xsl:attribute>
+          </xsl:if>
+        </lb>
+      </xsl:when>
+      <xsl:otherwise>
+        <ab>
+          <xsl:choose>
+            <xsl:when test="@class = 'onestar'">
+              <xsl:attribute name="type">dinkus</xsl:attribute>
+              <xsl:text>*</xsl:text>
+            </xsl:when>
+            <xsl:when test="@class = 'threestars'">
+              <xsl:attribute name="type">dinkus</xsl:attribute>
+              <xsl:text>*</xsl:text>
+              <lb/>
+              <xsl:text>* *</xsl:text>
+            </xsl:when>
+            <xsl:when test="@class = 'threestarsrow'">
+              <xsl:attribute name="type">dinkus</xsl:attribute>
+              <xsl:text>* * *</xsl:text>
+            </xsl:when>
+            <xsl:when test="@class='rule' or @class = 'dots' or @class='doublerule' or @class='fullwidth-rule' or @class='tilderule'">
+              <xsl:attribute name="type">rule</xsl:attribute>
+              <xsl:attribute name="rend">
+                <xsl:value-of select="@class"/>
+              </xsl:attribute>
+            </xsl:when>
+            <xsl:otherwise>
+              <xsl:attribute name="rend">center</xsl:attribute>
+            </xsl:otherwise>
+          </xsl:choose>
+        </ab>
+      </xsl:otherwise>
+    </xsl:choose>
   </xsl:template>
   <xsl:template match="bml:page-sequences">
     <body>
@@ -254,42 +294,45 @@
       <xsl:apply-templates select="node()|@*"/>
     </label>
   </xsl:template>
-  <xsl:template match="bml:speaker">
-    <speaker>
+  <xsl:template match="bml:hstage">
+    <label>
+      <xsl:choose>
+        <xsl:when test="bml:speaker">
+          <xsl:attribute name="type">speaker</xsl:attribute>
+        </xsl:when>
+      </xsl:choose>
       <xsl:apply-templates select="node()|@*"/>
-    </speaker>
+    </label>
+  </xsl:template>
+  <xsl:template match="bml:speaker">
+    <name>
+      <xsl:apply-templates select="node()|@*"/>
+    </name>
+  </xsl:template>
+  <xsl:template match="bml:pstage | bml:stage">
+    <stage>
+      <xsl:apply-templates select="node()|@*"/>
+    </stage>
   </xsl:template>
   <xsl:template match="bml:l">
     <l>
       <xsl:apply-templates select="@*"/>
       <xsl:choose>
         <xsl:when test="@indent = 1">
-          <space rend="tab">
-            <xsl:text>    </xsl:text>
-          </space>
+          <xsl:attribute name="rend">lmarg1</xsl:attribute>
         </xsl:when>
         <xsl:when test="@indent = 2">
-          <space rend="tab">
-            <xsl:text>    </xsl:text>
-          </space>
-          <space rend="tab">
-            <xsl:text>    </xsl:text>
-          </space>
+          <xsl:attribute name="rend">lmarg2</xsl:attribute>
         </xsl:when>
         <xsl:when test="@indent = 3">
-          <space rend="tab">
-            <xsl:text>    </xsl:text>
-          </space>
-          <space rend="tab">
-            <xsl:text>    </xsl:text>
-          </space>
-          <space rend="tab">
-            <xsl:text>    </xsl:text>
-          </space>
+          <xsl:attribute name="rend">lmarg3</xsl:attribute>
+        </xsl:when>
+        <xsl:when test="@indent = 4">
+          <xsl:attribute name="rend">lmarg4</xsl:attribute>
         </xsl:when>
         <xsl:when test="@indent">
           <space extent="{@indent} tabs">
-            <xsl:value-of select="substring('                                                          ', 1, 4 * @indent)"/>
+            <xsl:value-of select="substring('                                                              ', 1, 4 * @indent)"/>
           </space>
         </xsl:when>
       </xsl:choose>
@@ -312,12 +355,16 @@
     </lg>
   </xsl:template>
   <xsl:template match="bml:pagenum">
+    <xsl:apply-templates/>
     <pb n="{@num}"/>
   </xsl:template>
   <xsl:template match="bml:correction">
+    <!--
     <corr>
       <xsl:apply-templates select="node()|@*"/>
     </corr>
+    -->
+    <xsl:apply-templates/>
   </xsl:template>
   <xsl:template match="bml:correction/@original">
     <xsl:attribute name="n">

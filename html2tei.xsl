@@ -120,6 +120,11 @@ STRUCTURE
   </xsl:template>
   
   <!-- Wikisource -->
+  <xsl:template match="
+    html:div[@class='tableItem']
+    ">
+    <!-- strip -->
+  </xsl:template>
   <xsl:template match="html:ol[@class='references']">
     <div type="notes">
       <xsl:apply-templates/>
